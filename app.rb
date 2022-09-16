@@ -1,6 +1,9 @@
 require 'sinatra'
 require 'sinatra/json'
+require 'sinatra/subdomain'
 
-get '/' do
-  json result: 'Hi there~, fine thank you, and you? '
+subdomain [:www, nil] do
+  get '/' do
+    json result: 'Hi there~, fine thank you, and you? '
+  end
 end
