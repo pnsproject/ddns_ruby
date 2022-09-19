@@ -1,0 +1,30 @@
+#说明： 目前是通过：
+#
+#1. 用户发起请求：   vitalik.eth.test-ddns.com
+#2. 由caddy处理，（见所有子域名的配置)
+#3. 由sinatra处理
+#4. sinatra 获得vitalik.eth, 根据这个条件，查询到对应的content hash: bafybeigsn4u4nv4uyskxhewakk5m2j2lluzhsbsayp76zh7nbqznrxwm7e
+#5. sinatra redirect to: https://ipfsgate.test-ddns.com/ipfs/bafybeigsn4u4nv4uyskxhewakk5m2j2lluzhsbsayp76zh7nbqznrxwm7e/ 给用户
+#6. Caddy接收到用户的这个 redirect to的url , 开始正常访问
+
+# 这个是gateway, 用来处理正常的http形式的ipfs的内容请求
+ipfsgate.test-ddns.com {
+
+  reverse_proxy 127.0.0.1:8080
+  log {
+    output file /var/log/access-ipfsgate.log
+  }
+}
+
+# 所有子域名的配置, 单独这样写是为了使用 https来访问所有子域名
+*.test-ddns.com *.dot.test-ddns.com *.eth.test-ddns.com {
+  reverse_proxy 127.0.0.1:4567
+
+  log {
+    output file /var/log/access-wildcard-test-ddns.log
+  }
+
+  tls {
+    dns cloudflare RKY3vu3HYwmQdF9o8MaWYIK1JSM3O0Swk6JbgyTo
+  }
+}
