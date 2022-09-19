@@ -89,7 +89,7 @@ subdomain do
 end
 
 subdomain :api do
-  get "/name" do
+  get "/name/:name" do
     server_url = 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens'
     response = HTTParty.post server_url,
       :headers => { 'Content-Type' => 'application/json', 'Accept' => 'application/json'},
