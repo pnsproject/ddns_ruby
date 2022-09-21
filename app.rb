@@ -3,8 +3,11 @@ require 'sinatra/json'
 require 'sinatra/subdomain'
 require 'httparty'
 
-SITE_FULL_NAME = "test-ddns.com"
-IPFS_SITE_NAME = "https://ipfsgate.test-ddns.com"
+# 修改这个即可， 例如 ddns.so,  test-ddns.com
+#SITE_NAME = "test-ddns.com"
+SITE_NAME = "ddns.so"
+
+IPFS_SITE_NAME = "https://ipfsgate.#{SITE_NAME}"
 
 # 发起http post请求
 def post_request options
@@ -165,10 +168,36 @@ subdomain :api do
 
   end
 
-  get '/reverse' do
+  get '/reverse/:address' do
+
+    address = params[:address]
+
+    if address == nil || address == ''
+      halt 404, 'page not found(address is missing) '
+    end
+
+    subdomain_type = address.match(/0x/) ? 'eth' : 'dot'
+    case subdomain_type
+    when 'eth' then
+      temp_result = post_request server_url: 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens',
+        body_in_hash: {
+          "operationName": "MyQuery",
+          "query": "query MyQuery {\n account(id: \"#{address.downcase}\") {\n id\n domains {\n name\n labelhash\n }\n }\n}\n",
+          "variables": nil
+        }
+
+      result = JSON.parse(temp_result)['data']['account']['domains'].map{ |e| e["name"] } # rescue []
+    when 'dot' then
+      result = []
+    else
+      result = []
+    end
+
     json({
-      name: 'vitalik.eth',
-      namehash: '0x..'
+      code: 1,
+      message: 'success',
+      address: address,
+      result: result
     })
   end
 end
