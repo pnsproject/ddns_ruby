@@ -1,0 +1,2 @@
+kill -9 `ps -ef | grep ddns | grep 4567 | awk {'print $2'}`
+setsid nohup bundle exec ruby app.rb &
