@@ -98,7 +98,7 @@ subdomain do
   end
 end
 
-subdomain :api do
+#subdomain :api do
   get "/name/:name" do
     subdomain_type = params[:name].split('.').last
     result = ''
@@ -154,11 +154,6 @@ subdomain :api do
           resolvedAddress: {
             id: (domains['resolvedAddress']['id'] rescue ''),
             domains: domains_resolved_address,
-            #domains: {
-            #  labelName: (domains['resolvedAddress']['domains'][0]['labelName'] rescue ''),
-            #  labelhash: (domains['resolvedAddress']['domains'][0]['labelhash'] rescue ''),
-            #  name: (domains['resolvedAddress']['domains'][0]['name'] rescue '')
-            #}
           },
           ttl: domains['ttl'],
           cost: registration['cost'],
@@ -179,7 +174,7 @@ subdomain :api do
       temp_result = post_request server_url: 'https://moonbeamgraph.test-pns-link.com/subgraphs/name/graphprotocol/pns',
       body_in_hash: {
         "operationName": "MyQuery",
-        "query": "query MyQuery {\n  domains(where: {labelName: \"#{params[:name].sub(".dot", '')}\"}) {\n    labelhash\n    labelName\n    id\n    name\n    subdomains {\n      id\n      name\n      labelName\n      labelhash\n    }\n    subdomainCount\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n  }\n  sets(where: {domain_: {labelName: \"#{params[:name].sub(".dot", '')}\"}}) {\n    id\n    keyHash\n    value\n  }\n  registrations(where: {labelName: \"#{params[:name].sub(".dot", '')}\"}) {\n    expiryDate\n    events {\n      id\n      triggeredDate\n    }\n  }\n}\n",
+        "query": "query MyQuery {\n  domains(where: {name: \"#{params[:name]}\"}) {\n    labelhash\n    labelName\n    id\n    name\n    subdomains {\n      id\n      name\n      labelName\n      labelhash\n    }\n    subdomainCount\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n  }\n  sets(where: {domain_: {name: \"#{params[:name]}\"}}) {\n    id\n    keyHash\n    value\n  }\n  registrations(where: {labelName: \"#{params[:name].sub(".dot", '')}\"}) {\n    expiryDate\n    events {\n      id\n      triggeredDate\n    }\n  }\n}\n",
         "variables": nil
       }
 
@@ -223,23 +218,23 @@ subdomain :api do
         labelhash: result_domain['labelhash'],
         owner: result_domain['owner']['id'],
         parent: result_domain['parent']['id'],
-        expiryDate: Time.at(result_registrations[0]['expiryDate'].to_i),
-        registrationDate: Time.at(result_registrations[0]['events'].first['triggeredDate'].to_i),
+        expiryDate: (Time.at(result_registrations[0]['expiryDate'].to_i) rescue ''),
+        registrationDate: (Time.at(result_registrations[0]['events'].first['triggeredDate'].to_i) rescue ''),
         subdomains: result_domain['subdomains'],
         subdomainCount: result_domain['subdomainCount'],
         records: {
-          DOT: result_hash['DOT']['value'],
-          ETH: result_hash['ETH']['value'],
-          BTC: result_hash['BTC']['value'],
-          IPFS: result_hash['IPFS']['value'],
-          Email: result_hash['EMAIL']['value'],
-          Notice: result_hash['NOTICE']['value'],
-          twitter: result_hash['TWITTER_COM']['value'],
-          github: result_hash['GITHUB']['value'],
-          Url: result_hash['TWITTER_URL']['value'],
-          Avatar: result_hash['AVATAR']['value'],
-          CNAME: result_hash['C_NAME']['value']
-        },
+          DOT: (result_hash['DOT']['value'] rescue ''),
+          ETH: (result_hash['ETH']['value'] rescue ''),
+          BTC: (result_hash['BTC']['value'] rescue ''),
+          IPFS: (result_hash['IPFS']['value'] rescue ''),
+          Email: (result_hash['EMAIL']['value'] rescue ''),
+          Notice: (result_hash['NOTICE']['value'] rescue ''),
+          twitter: (result_hash['TWITTER_COM']['value'] rescue ''),
+          github: (result_hash['GITHUB']['value'] rescue ''),
+          Url: (result_hash['TWITTER_URL']['value'] rescue ''),
+          Avatar: (result_hash['AVATAR']['value'] rescue ''),
+          CNAME: (result_hash['C_NAME']['value'] rescue '')
+        }
       }
 
       json({
@@ -287,7 +282,7 @@ subdomain :api do
 
   end
 
-end
+#end
 
 get '/' do
   json result: 'hihi, you are visiting @ subdomain'
