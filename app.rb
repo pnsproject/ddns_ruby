@@ -66,12 +66,6 @@ def get_ipfs_cid subdomain
   return result
 end
 
-# 根据 domain的名字，例如 vitalik.eth 获得对应的json
-def get_result_for_eth_name(name)
-end
-# 根据 domain的名字，例如 12345678.dot 获得对应的json
-def get_result_for_dot_name(name)
-end
 subdomain [:www, nil] do
   get '/' do
     json result: "Hi there~, subdomain is: #{subdomain}"
@@ -98,7 +92,7 @@ subdomain do
   end
 end
 
-#subdomain :api do
+subdomain :api do
   get "/name/:name" do
     subdomain_type = params[:name].split('.').last
     result = ''
@@ -282,7 +276,7 @@ end
 
   end
 
-#end
+end
 
 get '/' do
   json result: 'hihi, you are visiting @ subdomain'
