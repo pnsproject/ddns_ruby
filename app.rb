@@ -106,14 +106,18 @@ subdomain :api do
     when 'eth'
       response = post_request server_url: 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens',
       body_in_hash: {
-        "query": "query MyQuery {\n  domains(where: {name: \"#{params[:name]}\"}) {\n    id\n    labelName\n    name\n    resolver {\n      id\n    }\n    labelhash\n    owner {\n      id\n    }\n    parent {\n      id\n      labelName\n      labelhash\n      name\n    }\n    subdomainCount\n    subdomains {\n      id\n      labelName\n      labelhash\n      name\n    }\n    resolvedAddress {\n      id\n      domains {\n        labelName\n        labelhash\n        name\n      }\n    }\n    ttl\n  }\n}",
-        #"query": "query MyQuery {\n  domains(where: {name: \"#{params[:name]}\"}) {\n    id\n    labelName\n    name\n    resolver {\n      id\n      texts\n      contentHash\n      coinTypes\n      address\n    }\n    labelhash\n    owner {\n      id\n    }\n    subdomainCount\n    subdomains {\n      id\n      labelName\n      labelhash\n      name\n    }\n    resolvedAddress {\n      id\n      domains {\n        labelName\n        labelhash\n        name\n      }\n    }\n    ttl\n  }\n}\n",
+        "query": "query MyQuery {\n  domains(where: {name: \"#{params[:name]}\"}) {\n    id\n    name\n    labelName\n    labelhash\n    resolver {\n      id\n      texts\n      contentHash\n      coinTypes\n      address\n    }\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n    subdomainCount\n    subdomains {\n      id\n      labelName\n      labelhash\n      name\n    }\n    resolvedAddress {\n      id\n      domains {\n        labelName\n        labelhash\n        name\n      }\n    }\n    ttl\n  }\n}",
         "variables": nil,
         "operationName": "MyQuery",
       }
       puts "== response: #{response}"
       body = JSON.parse(response)
       domains = body['data']['domains'][0]
+      if domains['resolvedAddress'] == nil
+        domains_resolved_address = nil
+      else
+        domains_resolved_address = domains['resolvedAddress']['domains']
+      end
       puts "==domains"
       puts domains.inspect
 
@@ -140,27 +144,33 @@ subdomain :api do
           labelhash: domains['labelhash'],
           owner: domains['owner']['id'],
           parent: domains['parent']['id'],
-          subdomainCount: domains['subdomainCount'],
           subdomains: {
-            id: "#{domains['subdomains']['id'] rescue ''}",
-            labelName: "#{domains['subdomains']['labelName'] rescue ''}",
-            labelhash: "#{domains['subdomains']['labelhash'] rescue ''}" ,
-            name: "#{domains['subdomains']['name'] rescue ''}",
+            id: (domains['subdomains']['id'] rescue ''),
+            labelName: (domains['subdomains']['labelName'] rescue ''),
+            labelhash: (domains['subdomains']['labelhash'] rescue ''),
+            name: (domains['subdomains']['name'] rescue ''),
           },
+          subdomainCount: domains['subdomainCount'],
           resolvedAddress: {
-            id: domains['resolvedAddress']['id'],
-            domains: {
-              labelName: domains['resolvedAddress']['domains'][0]['labelName'],
-              labelhash: domains['resolvedAddress']['domains'][0]['labelhash'],
-              name: domains['resolvedAddress']['domains'][0]['name']
-            }
+            id: (domains['resolvedAddress']['id'] rescue ''),
+            domains: domains_resolved_address,
+            #domains: {
+            #  labelName: (domains['resolvedAddress']['domains'][0]['labelName'] rescue ''),
+            #  labelhash: (domains['resolvedAddress']['domains'][0]['labelhash'] rescue ''),
+            #  name: (domains['resolvedAddress']['domains'][0]['name'] rescue '')
+            #}
           },
           ttl: domains['ttl'],
           cost: registration['cost'],
-          registration: {
-            id: registration['id'],
-            expiryDate: Time.at(registration['expiryDate'].to_i),
-            registrationDate: Time.at(registration['registrationDate'].to_i)
+          expiryDate: Time.at(registration['expiryDate'].to_i),
+          registrationDate: Time.at(registration['registrationDate'].to_i),
+          records: {
+            contenthash: (domains['resolver']['contentHash'] rescue ''),
+            eth: domains['owner']['id'],
+            dot: '',
+            btc: '',
+            text: (domains['resolver']['texts'] rescue ''),
+            pubkey: ''
           }
         }
       })
@@ -169,7 +179,6 @@ subdomain :api do
       temp_result = post_request server_url: 'https://moonbeamgraph.test-pns-link.com/subgraphs/name/graphprotocol/pns',
       body_in_hash: {
         "operationName": "MyQuery",
-        #"query": "query MyQuery {\n  domains(where: {labelName: \"#{params[:name]}\"}) {\n    labelhash\n    labelName\n    id\n    name\n    subdomains {\n      name\n      owner {\n        id\n      }\n      id\n      labelName\n      labelhash\n    }\n    subdomainCount\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n  }\n  registrations(where: {labelName: \"#{params[:name]}\"}) {\n    expiryDate\n    events {\n      triggeredDate\n    }\n  }\n}\n",
         "query": "query MyQuery {\n  domains(where: {labelName: \"#{params[:name].sub(".dot", '')}\"}) {\n    labelhash\n    labelName\n    id\n    name\n    subdomains {\n      id\n      name\n      labelName\n      labelhash\n    }\n    subdomainCount\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n  }\n  sets(where: {domain_: {labelName: \"#{params[:name].sub(".dot", '')}\"}}) {\n    id\n    keyHash\n    value\n  }\n  registrations(where: {labelName: \"#{params[:name].sub(".dot", '')}\"}) {\n    expiryDate\n    events {\n      id\n      triggeredDate\n    }\n  }\n}\n",
         "variables": nil
       }
@@ -276,43 +285,6 @@ subdomain :api do
       result: result
     })
 
-  end
-  get '/domain/:subdomain' do
-    temp_result = post_request server_url: 'https://moonbeamgraph.test-pns-link.com/subgraphs/name/graphprotocol/pns',
-      body_in_hash: {
-        "operationName": "MyQuery",
-        "query": "query MyQuery {\n  domains(where: {name: \"zzzzzzzzzzzzzzzzzzzzz.dot\"}) {\n    labelhash\n    labelName\n    id\n    name\n    subdomainCount\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n  }\n  sets(where: {domain_: {name: \"zzzzzzzzzzzzzzzzzzzzz.dot\"}}) {\n    id\n    keyHash\n    value\n  }\n  registrations {\n    expiryDate\n  }\n}",
-        "variables": nil
-      }
-
-    result_domain = JSON.parse(temp_result)['data']['domains'][0]
-    result_sets = JSON.parse(temp_result)['data']['sets'].last
-    result_registrations = JSON.parse(temp_result)['data']['registrations'].last
-    result = {
-      labelName: result_domain['labelName'],
-      labelhash: result_domain['labelhash'],
-      id: result_domain['id'],
-      name: result_domain['name'],
-      owner: {
-        id: result_domain['owner']['id']
-      },
-      parent: {
-        id: result_domain['parent']['id']
-      },
-      subdomainCount: result_domain['subdomainCount'],
-      records: {
-        "key - value": result_sets['id'],
-        keyHash: result_sets['keyHash'],
-        ipfs: result_sets['value']
-      },
-      expiryDate: result_registrations['expiryDate']
-    }
-
-    json({
-      code: 1,
-      message: 'success',
-      result: result
-    })
   end
 
 end
