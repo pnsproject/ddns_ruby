@@ -8,11 +8,12 @@ require 'date'
 #SITE_NAME = "test-ddns.com"
 SITE_NAME = "ddns.so"
 
-IPFS_SITE_NAME = "https://ipfsgate.#{SITE_NAME}"
-
+#IPFS_SITE_NAME = "https://ipfsgate.#{SITE_NAME}"
+IPFS_SITE_NAME = ""
+ENS_SERVER_URL = 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens'
+PNS_SERVER_URL = 'https://moonbeamgraph.test-pns-link.com/subgraphs/name/graphprotocol/pns'
 # 发起http post请求
 def post_request options
-
   server_url = options[:server_url]
   body_in_hash = options[:body_in_hash]
 
@@ -29,11 +30,10 @@ end
 # 根据 domain的名字，例如 vitalik.eth 获得对应的ipfs cid
 def get_ipfs_cid subdomain
   subdomain_type = subdomain.split('.').last
-
   result = ''
   case subdomain_type
   when 'eth'
-    temp_result1 = post_request server_url: 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens',
+    temp_result1 = post_request server_url: ENS_SERVER_URL,
       body_in_hash: {
         "query": "query MyQuery {\n  domains(where: {name: \"#{subdomain}\"}) {\n    id\n    labelName\n    name\n    resolver {\n      id\n    }\n  }\n}",
         "variables": nil,
@@ -67,7 +67,7 @@ def get_ipfs_cid subdomain
 end
 
 def get_result_for_ens name
-  response = post_request server_url: 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens',
+  response = post_request server_url: ENS_SERVER_URL,
   body_in_hash: {
     "query": "query MyQuery {\n  domains(where: {name: \"#{name}\"}) {\n    id\n    name\n    labelName\n    labelhash\n    resolver {\n      id\n      texts\n      contentHash\n      coinTypes\n      address\n    }\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n    subdomainCount\n    subdomains {\n      id\n      labelName\n      labelhash\n      name\n    }\n    resolvedAddress {\n      id\n      domains {\n        labelName\n        labelhash\n        name\n      }\n    }\n    ttl\n  }\n}",
     "variables": nil,
@@ -81,24 +81,22 @@ def get_result_for_ens name
 end
 
 def get_response_registration_for_ens domains_labelhash
-  response_registration = post_request server_url: 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens',
+  response_registration = post_request server_url: ENS_SERVER_URL,
   body_in_hash: {
     "query": "query MyQuery {\n  registration(\n    id: \"#{domains_labelhash}\"\n  ) {\n    id\n    expiryDate\n    labelName\n    registrationDate\n    cost\n  }\n}",
     "variables": nil,
     "operationName": "MyQuery",
   }
-
-    puts "== response_registration: #{response_registration}"
-    body_registration = JSON.parse(response_registration)
-    puts body_registration['data'].inspect
-    registration = body_registration['data']['registration']
-    puts "==registration"
-    return registration
+  puts "== response_registration: #{response_registration}"
+  body_registration = JSON.parse(response_registration)
+  puts body_registration['data'].inspect
+  registration = body_registration['data']['registration']
+  puts "==registration"
+  return registration
 end
 
 def get_result_for_pns name
-
-  temp_result = post_request server_url: 'https://moonbeamgraph.test-pns-link.com/subgraphs/name/graphprotocol/pns',
+  temp_result = post_request server_url: PNS_SERVER_URL,
     body_in_hash: {
       "operationName": "MyQuery",
       "query": "query MyQuery {\n  domains(where: {name: \"#{name}\"}) {\n    labelhash\n    labelName\n    id\n    name\n    subdomains {\n      name\n      owner {\n        id\n      }\n    }\n    subdomainCount\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n  }\n  sets(where: {domain_: {name: \"#{name}\"}}) {\n    id\n    keyHash\n    value\n  }\n  registrations(where: {labelName: \"#{name.sub(".dot", '')}\"}) {\n    expiryDate\n    events {\n      id\n      triggeredDate\n    }\n  }\n}\n",
@@ -124,20 +122,18 @@ def get_result_hash_for_pns result_sets
   result_hash = {}
   temp_hash.map { |key, value|
     dot_value = []
-    result_sets.each { |e|
-      if e['keyHash'] == value
-        dot_value << e
-        puts dot_value
-        puts key
-        puts value
-        puts e['keyHash']
-      end
-      if dot_value.last == nil
-        hash = result_hash.store(key, '')
-      else
-        hash = result_hash.store(key, dot_value.last)
-      end
-    }
+    dot_value = result_sets.select{ |e| e['keyHash'] == value }.last || ''
+    #result_sets.each { |e|
+    #  if e['keyHash'] == value
+    #    dot_value << e
+    #  end
+    #  if dot_value.last == nil
+    #    hash = result_hash.store(key, '')
+    #  else
+    #    hash = result_hash.store(key, dot_value.last)
+    #  end
+    #}
+    result_hash.store(key, (dot_value.last || ''))
   }
   puts "=== temp_hash : #{temp_hash}"
   puts "=== result_hash: #{result_hash}"
@@ -176,49 +172,49 @@ subdomain :api do
     case subdomain_type
     when 'eth'
       domains = get_result_for_ens params[:name]
-      if domains['resolvedAddress'] == nil
-        domains_resolved_address = nil
-      else
-        domains_resolved_address = domains['resolvedAddress']['domains']
-      end
+      #if domains['resolvedAddress'] == nil
+      #  domains_resolved_address = nil
+      #else
+      domains_resolved_address = domains['resolvedAddress']['domains'] rescue ''
+      #end
       puts "==domains #{domains}"
       domains_labelhash = domains_labelhash
       registration = get_response_registration_for_ens domains['labelhash']
-
+      result = {
+        name: domains['name'],
+        nameHash: "",
+        labelName: domains['labelName'],
+        labelhash: domains['labelhash'],
+        owner: domains['owner']['id'],
+        parent: domains['parent']['id'],
+        subdomains: {
+          id: (domains['subdomains']['id'] rescue ''),
+          labelName: (domains['subdomains']['labelName'] rescue ''),
+          labelhash: (domains['subdomains']['labelhash'] rescue ''),
+          name: (domains['subdomains']['name'] rescue ''),
+        },
+        subdomainCount: domains['subdomainCount'],
+        resolvedAddress: {
+          id: (domains['resolvedAddress']['id'] rescue ''),
+          domains: domains_resolved_address,
+        },
+        ttl: domains['ttl'],
+        cost: registration['cost'],
+        expiryDate: Time.at(registration['expiryDate'].to_i),
+        registrationDate: Time.at(registration['registrationDate'].to_i),
+        records: {
+          contenthash: (domains['resolver']['contentHash'] rescue ''),
+          eth: domains['owner']['id'],
+          dot: '',
+          btc: '',
+          text: (domains['resolver']['texts'] rescue ''),
+          pubkey: ''
+        }
+      }
       json({
         code: 1,
         message: 'success',
-        result: {
-          name: domains['name'],
-          nameHash: "",
-          labelName: domains['labelName'],
-          labelhash: domains['labelhash'],
-          owner: domains['owner']['id'],
-          parent: domains['parent']['id'],
-          subdomains: {
-            id: (domains['subdomains']['id'] rescue ''),
-            labelName: (domains['subdomains']['labelName'] rescue ''),
-            labelhash: (domains['subdomains']['labelhash'] rescue ''),
-            name: (domains['subdomains']['name'] rescue ''),
-          },
-          subdomainCount: domains['subdomainCount'],
-          resolvedAddress: {
-            id: (domains['resolvedAddress']['id'] rescue ''),
-            domains: domains_resolved_address,
-          },
-          ttl: domains['ttl'],
-          cost: registration['cost'],
-          expiryDate: Time.at(registration['expiryDate'].to_i),
-          registrationDate: Time.at(registration['registrationDate'].to_i),
-          records: {
-            contenthash: (domains['resolver']['contentHash'] rescue ''),
-            eth: domains['owner']['id'],
-            dot: '',
-            btc: '',
-            text: (domains['resolver']['texts'] rescue ''),
-            pubkey: ''
-          }
-        }
+        result: result
       })
 
     when 'dot'
@@ -227,7 +223,6 @@ subdomain :api do
       result_sets = JSON.parse(temp_result)['data']['sets']
       result_registrations = JSON.parse(temp_result)['data']['registrations']
       result_hash = get_result_hash_for_pns result_sets
-      # 取到了所有的 key hash 对应的value
       result = {
         name: result_domain['name'],
         namehash: '',
