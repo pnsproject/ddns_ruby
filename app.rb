@@ -92,10 +92,10 @@ subdomain do
   end
 end
 
-subdomain :api do
+#subdomain :api do
   get "/name/:name" do
+    children = params['children']
     subdomain_type = params[:name].split('.').last
-    result = ''
     case subdomain_type
     when 'eth'
       response = post_request server_url: 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens',
@@ -165,10 +165,11 @@ subdomain :api do
       })
 
     when 'dot'
+      puts "=== params[:name].split('.') #{params[:name].sub('.dot', '')}"
       temp_result = post_request server_url: 'https://moonbeamgraph.test-pns-link.com/subgraphs/name/graphprotocol/pns',
       body_in_hash: {
         "operationName": "MyQuery",
-        "query": "query MyQuery {\n  domains(where: {name: \"#{params[:name]}\"}) {\n    labelhash\n    labelName\n    id\n    name\n    subdomains {\n      id\n      name\n      labelName\n      labelhash\n    }\n    subdomainCount\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n  }\n  sets(where: {domain_: {name: \"#{params[:name]}\"}}) {\n    id\n    keyHash\n    value\n  }\n  registrations(where: {labelName: \"#{params[:name].sub(".dot", '')}\"}) {\n    expiryDate\n    events {\n      id\n      triggeredDate\n    }\n  }\n}\n",
+        "query": "query MyQuery {\n  domains(where: {name: \"#{params[:name]}\"}) {\n    labelhash\n    labelName\n    id\n    name\n    subdomains {\n      name\n      owner {\n        id\n      }\n    }\n    subdomainCount\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n  }\n  sets(where: {domain_: {name: \"#{params[:name]}\"}}) {\n    id\n    keyHash\n    value\n  }\n  registrations(where: {labelName: \"#{params[:name].sub(".dot", '')}\"}) {\n    expiryDate\n    events {\n      id\n      triggeredDate\n    }\n  }\n}\n",
         "variables": nil
       }
 
@@ -194,6 +195,10 @@ subdomain :api do
         result_sets.each { |e|
           if e['keyHash'] == value
             dot_value << e
+            puts dot_value
+            puts key
+            puts value
+            puts e['keyHash']
           end
           if dot_value.last == nil
             hash = result_hash.store(key, '')
@@ -214,7 +219,6 @@ subdomain :api do
         parent: result_domain['parent']['id'],
         expiryDate: (Time.at(result_registrations[0]['expiryDate'].to_i) rescue ''),
         registrationDate: (Time.at(result_registrations[0]['events'].first['triggeredDate'].to_i) rescue ''),
-        subdomains: result_domain['subdomains'],
         subdomainCount: result_domain['subdomainCount'],
         records: {
           DOT: (result_hash['DOT']['value'] rescue ''),
@@ -230,6 +234,12 @@ subdomain :api do
           CNAME: (result_hash['C_NAME']['value'] rescue '')
         }
       }
+      puts "===query_type: #{params[:name]}"
+      puts "===result : #{result}"
+      if params['subdomains'] == 'yes'
+        result['subdomains'] = result_domain['subdomains']
+      end
+      puts "===result : #{result}"
 
       json({
         code: 1,
@@ -276,7 +286,7 @@ subdomain :api do
 
   end
 
-end
+#end
 
 get '/' do
   json result: 'hihi, you are visiting @ subdomain'
