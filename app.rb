@@ -66,6 +66,84 @@ def get_ipfs_cid subdomain
   return result
 end
 
+def get_result_for_ens name
+  response = post_request server_url: 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens',
+  body_in_hash: {
+    "query": "query MyQuery {\n  domains(where: {name: \"#{name}\"}) {\n    id\n    name\n    labelName\n    labelhash\n    resolver {\n      id\n      texts\n      contentHash\n      coinTypes\n      address\n    }\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n    subdomainCount\n    subdomains {\n      id\n      labelName\n      labelhash\n      name\n    }\n    resolvedAddress {\n      id\n      domains {\n        labelName\n        labelhash\n        name\n      }\n    }\n    ttl\n  }\n}",
+    "variables": nil,
+    "operationName": "MyQuery",
+  }
+  puts "== response: #{response}"
+  body = JSON.parse(response)
+  domains = body['data']['domains'][0]
+  puts "===domains #{domains}"
+  return domains
+end
+
+def get_response_registration_for_ens domains_labelhash
+  response_registration = post_request server_url: 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens',
+  body_in_hash: {
+    "query": "query MyQuery {\n  registration(\n    id: \"#{domains_labelhash}\"\n  ) {\n    id\n    expiryDate\n    labelName\n    registrationDate\n    cost\n  }\n}",
+    "variables": nil,
+    "operationName": "MyQuery",
+  }
+
+    puts "== response_registration: #{response_registration}"
+    body_registration = JSON.parse(response_registration)
+    puts body_registration['data'].inspect
+    registration = body_registration['data']['registration']
+    puts "==registration"
+    return registration
+end
+
+def get_result_for_pns name
+
+  temp_result = post_request server_url: 'https://moonbeamgraph.test-pns-link.com/subgraphs/name/graphprotocol/pns',
+    body_in_hash: {
+      "operationName": "MyQuery",
+      "query": "query MyQuery {\n  domains(where: {name: \"#{name}\"}) {\n    labelhash\n    labelName\n    id\n    name\n    subdomains {\n      name\n      owner {\n        id\n      }\n    }\n    subdomainCount\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n  }\n  sets(where: {domain_: {name: \"#{name}\"}}) {\n    id\n    keyHash\n    value\n  }\n  registrations(where: {labelName: \"#{name.sub(".dot", '')}\"}) {\n    expiryDate\n    events {\n      id\n      triggeredDate\n    }\n  }\n}\n",
+      "variables": nil
+    }
+  return temp_result
+end
+
+def get_result_hash_for_pns result_sets
+  temp_hash = {
+    "DOT" => '70476024645083539914866120258902002044389822943217047784978736702069848167247',
+    "ETH" => '77201932000687051421874801696342701541816747065578039511607412978553675800564',
+    "BTC" => '105640063387051144792550451261497903460441457163918809975891088748950929433065',
+    "IPFS" => '109444936916467285377972213791356162468265265799777646334604004948560489512394',
+    "EMAIL" => '50101170924916254227885891120695131387383646459470231890507002477095918146885',
+    "NOTICE" => '31727182724036554852371956750201584211517824919105130426252222689897810866214',
+    "TWITTER_COM" => '11710898932869919534375710263824782355793106641910621555855312720536896315685',
+    "GITHUB" => '102576668688838416847107385580607409742813859881781246507337882384803237069874',
+    "TWITTER_URL" => '23368862207911262087635895660209245090921614897479706708279561601163163997039',
+    "AVATAR" => '98593787308120460448886304499976840768878166060614499815391824681489593998420',
+    "C_NAME" => '69611991539268867131500085835156593536513732089793432642972060827780580969128'
+  }
+  result_hash = {}
+  temp_hash.map { |key, value|
+    dot_value = []
+    result_sets.each { |e|
+      if e['keyHash'] == value
+        dot_value << e
+        puts dot_value
+        puts key
+        puts value
+        puts e['keyHash']
+      end
+      if dot_value.last == nil
+        hash = result_hash.store(key, '')
+      else
+        hash = result_hash.store(key, dot_value.last)
+      end
+    }
+  }
+  puts "=== temp_hash : #{temp_hash}"
+  puts "=== result_hash: #{result_hash}"
+  return result_hash
+end
+
 subdomain [:www, nil] do
   get '/' do
     json result: "Hi there~, subdomain is: #{subdomain}"
@@ -92,42 +170,21 @@ subdomain do
   end
 end
 
-#subdomain :api do
+subdomain :api do
   get "/name/:name" do
-    children = params['children']
     subdomain_type = params[:name].split('.').last
     case subdomain_type
     when 'eth'
-      response = post_request server_url: 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens',
-      body_in_hash: {
-        "query": "query MyQuery {\n  domains(where: {name: \"#{params[:name]}\"}) {\n    id\n    name\n    labelName\n    labelhash\n    resolver {\n      id\n      texts\n      contentHash\n      coinTypes\n      address\n    }\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n    subdomainCount\n    subdomains {\n      id\n      labelName\n      labelhash\n      name\n    }\n    resolvedAddress {\n      id\n      domains {\n        labelName\n        labelhash\n        name\n      }\n    }\n    ttl\n  }\n}",
-        "variables": nil,
-        "operationName": "MyQuery",
-      }
-      puts "== response: #{response}"
-      body = JSON.parse(response)
-      domains = body['data']['domains'][0]
+      domains = get_result_for_ens params[:name]
       if domains['resolvedAddress'] == nil
         domains_resolved_address = nil
       else
         domains_resolved_address = domains['resolvedAddress']['domains']
       end
-      puts "==domains"
-      puts domains.inspect
+      puts "==domains #{domains}"
+      domains_labelhash = domains_labelhash
+      registration = get_response_registration_for_ens domains['labelhash']
 
-      response_registration = post_request server_url: 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens',
-      body_in_hash: {
-        "query": "query MyQuery {\n  registration(\n    id: \"#{domains['labelhash']}\"\n  ) {\n    id\n    expiryDate\n    labelName\n    registrationDate\n    cost\n  }\n}",
-        "variables": nil,
-        "operationName": "MyQuery",
-      }
-
-        puts "== response_registration: #{response_registration}"
-        body_registration = JSON.parse(response_registration)
-        puts body_registration['data'].inspect
-        registration = body_registration['data']['registration']
-        puts "==registration"
-        puts registration.inspect
       json({
         code: 1,
         message: 'success',
@@ -165,50 +222,11 @@ end
       })
 
     when 'dot'
-      puts "=== params[:name].split('.') #{params[:name].sub('.dot', '')}"
-      temp_result = post_request server_url: 'https://moonbeamgraph.test-pns-link.com/subgraphs/name/graphprotocol/pns',
-      body_in_hash: {
-        "operationName": "MyQuery",
-        "query": "query MyQuery {\n  domains(where: {name: \"#{params[:name]}\"}) {\n    labelhash\n    labelName\n    id\n    name\n    subdomains {\n      name\n      owner {\n        id\n      }\n    }\n    subdomainCount\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n  }\n  sets(where: {domain_: {name: \"#{params[:name]}\"}}) {\n    id\n    keyHash\n    value\n  }\n  registrations(where: {labelName: \"#{params[:name].sub(".dot", '')}\"}) {\n    expiryDate\n    events {\n      id\n      triggeredDate\n    }\n  }\n}\n",
-        "variables": nil
-      }
-
+      temp_result = get_result_for_pns params[:name]
       result_domain = JSON.parse(temp_result)['data']['domains'][0]
       result_sets = JSON.parse(temp_result)['data']['sets']
       result_registrations = JSON.parse(temp_result)['data']['registrations']
-      temp_hash = {
-        "DOT" => '70476024645083539914866120258902002044389822943217047784978736702069848167247',
-        "ETH" => '77201932000687051421874801696342701541816747065578039511607412978553675800564',
-        "BTC" => '105640063387051144792550451261497903460441457163918809975891088748950929433065',
-        "IPFS" => '109444936916467285377972213791356162468265265799777646334604004948560489512394',
-        "EMAIL" => '50101170924916254227885891120695131387383646459470231890507002477095918146885',
-        "NOTICE" => '31727182724036554852371956750201584211517824919105130426252222689897810866214',
-        "TWITTER_COM" => '11710898932869919534375710263824782355793106641910621555855312720536896315685',
-        "GITHUB" => '102576668688838416847107385580607409742813859881781246507337882384803237069874',
-        "TWITTER_URL" => '23368862207911262087635895660209245090921614897479706708279561601163163997039',
-        "AVATAR" => '98593787308120460448886304499976840768878166060614499815391824681489593998420',
-        "C_NAME" => '69611991539268867131500085835156593536513732089793432642972060827780580969128'
-      }
-      result_hash = {}
-      temp_hash.map { |key, value|
-        dot_value = []
-        result_sets.each { |e|
-          if e['keyHash'] == value
-            dot_value << e
-            puts dot_value
-            puts key
-            puts value
-            puts e['keyHash']
-          end
-          if dot_value.last == nil
-            hash = result_hash.store(key, '')
-          else
-            hash = result_hash.store(key, dot_value.last)
-          end
-        }
-      }
-      puts "=== temp_hash : #{temp_hash}"
-      puts "=== result_hash: #{result_hash}"
+      result_hash = get_result_hash_for_pns result_sets
       # 取到了所有的 key hash 对应的value
       result = {
         name: result_domain['name'],
@@ -234,12 +252,11 @@ end
           CNAME: (result_hash['C_NAME']['value'] rescue '')
         }
       }
-      puts "===query_type: #{params[:name]}"
-      puts "===result : #{result}"
+      puts "=== before add subdomains result : #{result}"
       if params['subdomains'] == 'yes'
         result['subdomains'] = result_domain['subdomains']
       end
-      puts "===result : #{result}"
+      puts "=== after add subdomains result : #{result}"
 
       json({
         code: 1,
@@ -286,7 +303,7 @@ end
 
   end
 
-#end
+end
 
 get '/' do
   json result: 'hihi, you are visiting @ subdomain'
