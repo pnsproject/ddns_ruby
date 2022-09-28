@@ -3,7 +3,10 @@ require 'sinatra/json'
 require 'sinatra/subdomain'
 require 'httparty'
 require 'date'
+require 'sinatra/custom_logger'
+require 'logger'
 
+set :logger, Logger.new('log.txt')
 # 修改这个即可， 例如 ddns.so,  test-ddns.com
 #SITE_NAME = "test-ddns.com"
 SITE_NAME = "ddns.so"
@@ -21,7 +24,7 @@ def post_request options
     :headers => { 'Content-Type' => 'application/json', 'Accept' => 'application/json'},
     :body => body_in_hash.to_json
 
-  puts "== response: #{response}"
+  logger.info "== response: #{response}"
 
   result = response.body
   return result
@@ -55,7 +58,7 @@ def get_ipfs_cid subdomain
     command = "node get_ipfs_cid.js #{content_hash}"
 
     result = `#{command}`
-    puts result
+    logger.info result
 
   when 'dot'
     raise 'not implemented'
@@ -73,10 +76,10 @@ def get_result_for_ens name
     "variables": nil,
     "operationName": "MyQuery",
   }
-  puts "== response: #{response}"
+  logger.info "== response: #{response}"
   body = JSON.parse(response)
   domains = body['data']['domains'][0]
-  puts "===domains #{domains}"
+  logger.info "===domains #{domains}"
   return domains
 end
 
@@ -87,11 +90,11 @@ def get_response_registration_for_ens domains_labelhash
     "variables": nil,
     "operationName": "MyQuery",
   }
-  puts "== response_registration: #{response_registration}"
+  logger.info "== response_registration: #{response_registration}"
   body_registration = JSON.parse(response_registration)
-  puts body_registration['data'].inspect
+  logger.info body_registration['data'].inspect
   registration = body_registration['data']['registration']
-  puts "==registration"
+  logger.info "==registration"
   return registration
 end
 
@@ -138,8 +141,8 @@ def get_result_hash_for_pns result_sets
       end
     }
   }
-  puts "=== temp_hash : #{temp_hash}"
-  puts "=== result_hash: #{result_hash}"
+  logger.info "=== temp_hash : #{temp_hash}"
+  logger.info "=== result_hash: #{result_hash}"
   return result_hash
 end
 
@@ -206,13 +209,29 @@ def get_pns_json_result result_domain, result_hash, registration
 end
 
 def result_for_reverse_ens address
-  temp_result = post_request server_url: 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens',
+  temp_result = post_request server_url: ENS_SERVER_URL,
     body_in_hash: {
       "operationName": "MyQuery",
       "query": "query MyQuery {\n account(id: \"#{address.downcase}\") {\n id\n domains {\n name\n labelhash\n }\n }\n}\n",
       "variables": nil
     }
-  result = JSON.parse(temp_result)['data']['account']['domains'].map{ |e| e["name"] } # rescue []
+  logger.info "===temp_result in ens#{temp_result}"
+  result = JSON.parse(temp_result)['data']['account']['domains'].map{ |e| e["name"] } rescue []
+  logger.info "===result in ens#{result}"
+  return result
+end
+
+def result_for_reverse_pns address
+  temp_result = post_request server_url: PNS_SERVER_URL,
+    body_in_hash: {
+      "operationName": "MyQuery",
+      "query": "query MyQuery {\n  domains(where: {owner: \"#{address.downcase}\"}) {\n    name\n    labelhash\n    labelName\n    id\n    createdAt\n  }\n}\n",
+      "variables": nil
+    }
+  logger.info "===temp_result in pns#{temp_result}"
+  result = JSON.parse(temp_result)['data']['domains'].map{ |e| e["name"] } rescue ''
+  logger.info "===result in pns#{result}"
+  return result
 end
 
 subdomain [:www, nil] do
@@ -223,7 +242,7 @@ end
 
 subdomain do
   get '/' do
-    puts "=== subdomain is: #{subdomain}"
+    logger.info "=== subdomain is: #{subdomain}"
     # 先获得content
     #
     cid = get_ipfs_cid subdomain rescue ''
@@ -236,7 +255,7 @@ subdomain do
     end
 
     target_url = "#{IPFS_SITE_NAME}/ipfs/#{cid}"
-    puts "== content is: #{cid}, redirecting..#{target_url}"
+    logger.info "== content is: #{cid}, redirecting..#{target_url}"
     redirect to(target_url)
   end
 end
@@ -247,7 +266,7 @@ end
     case subdomain_type
     when 'eth'
       domains = get_result_for_ens params[:name]
-      puts "==domains #{domains}"
+      logger.info "==domains #{domains}"
       domains_labelhash = domains_labelhash
       registration = get_response_registration_for_ens domains['labelhash']
       result = get_ens_json_result(domains, registration)
@@ -264,9 +283,9 @@ end
       result_registration = JSON.parse(temp_result)['data']['registrations'][0]
       result_hash = get_result_hash_for_pns result_sets
       result = get_pns_json_result result_domain, result_hash, registration
-      puts "=== before add subdomains result : #{result}"
-      result['subdomains'] = result_domain['subdomains'] if params['subdomains'] == 'yes'
-      puts "=== after add subdomains result : #{result}"
+      logger.info "=== before add subdomains result : #{result}"
+      result['subdomains'] = result_domain['subdomains'] if params['is_show_subdomains'] == 'yes'
+      logger.info "=== after add subdomains result : #{result}"
 
       json({
         code: 1,
@@ -287,15 +306,12 @@ end
       halt 404, 'page not found(address is missing) '
     end
 
-    subdomain_type = address.match(/0x/) ? 'eth' : 'dot'
-    case subdomain_type
-    when 'eth' then
+    if params[:type] == 'eth'
       result = result_for_reverse_ens address
-    when 'dot' then
-      result = []
     else
-      result = []
+      result = result_for_reverse_pns address
     end
+    logger.info "result : #{result}"
 
     json({
       code: 1,
