@@ -92,9 +92,8 @@ def get_response_registration_for_ens domains_labelhash
   }
   logger.info "== response_registration: #{response_registration}"
   body_registration = JSON.parse(response_registration)
-  logger.info body_registration['data'].inspect
   registration = body_registration['data']['registration']
-  logger.info "==registration"
+  logger.info "==registration #{registration}"
   return registration
 end
 
@@ -169,7 +168,7 @@ def get_ens_json_result domains, registration
   return result
 end
 
-def get_pns_json_result result_domain, result_hash, registration
+def get_pns_json_result result_domain, result_hash, result_registration
   result = {
     name: result_domain['name'],
     namehash: '',
@@ -178,7 +177,7 @@ def get_pns_json_result result_domain, result_hash, registration
     owner: result_domain['owner']['id'],
     parent: result_domain['parent']['id'],
     expiryDate: (Time.at(result_registration['expiryDate'].to_i) rescue ''),
-    registrationDate: (Time.at(result_registration['events'].first['triggeredDate'].to_i) rescue ''),
+    registrationDate: (Time.at(result_registration['events'][0]['triggeredDate'].to_i) rescue ''),
     subdomainCount: result_domain['subdomainCount'],
     records: {
       DOT: (result_hash['DOT']['value'] rescue ''),
@@ -272,7 +271,7 @@ subdomain :api do
       result_sets = JSON.parse(temp_result)['data']['sets']
       result_registration = JSON.parse(temp_result)['data']['registrations'][0]
       result_hash = get_result_hash_for_pns result_sets
-      result = get_pns_json_result result_domain, result_hash, registration
+      result = get_pns_json_result result_domain, result_hash, result_registration
       logger.info "=== before add subdomains result : #{result}"
       result_domain['subdomains'].each do |subdomain|
         subdomain['owner'] = subdomain['owner']['id']
