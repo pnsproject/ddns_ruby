@@ -72,9 +72,9 @@ end
 def get_result_for_ens name
   response = post_request server_url: ENS_SERVER_URL,
   body_in_hash: {
-    "query": "query MyQuery {\n  domains(where: {name: \"#{name}\"}) {\n    id\n    name\n    labelName\n    labelhash\n    resolver {\n      id\n      texts\n      contentHash\n      coinTypes\n      address\n    }\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n    subdomainCount\n    subdomains {\n      id\n      labelName\n      labelhash\n      name\n    }\n    resolvedAddress {\n      id\n      domains {\n        labelName\n        labelhash\n        name\n      }\n    }\n    ttl\n  }\n}",
+    "query":"query MyQuery {\n  domains(where: {name: \"#{name}\"}) {\n    id\n    labelName\n    name\n    labelhash\n    subdomains {\n      id\n      name\n      subdomains {\n        name\n        labelhash\n        labelName\n      }\n    }\n    subdomainCount\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n    resolvedAddress {\n      id\n      domains {\n        labelName\n        labelhash\n        name\n      }\n    }\n    ttl\n\t\tresolver {\n\t\t  id\n      contentHash\n      texts\n      address\n      coinTypes\n\t\t}\n  }\n}\n",
     "variables": nil,
-    "operationName": "MyQuery",
+    "operationName": "MyQuery"
   }
   logger.info "== response: #{response}"
   body = JSON.parse(response)
@@ -88,7 +88,7 @@ def get_response_registration_for_ens domains_labelhash
   body_in_hash: {
     "query": "query MyQuery {\n  registration(\n    id: \"#{domains_labelhash}\"\n  ) {\n    id\n    expiryDate\n    labelName\n    registrationDate\n    cost\n  }\n}",
     "variables": nil,
-    "operationName": "MyQuery",
+    "operationName": "MyQuery"
   }
   logger.info "== response_registration: #{response_registration}"
   body_registration = JSON.parse(response_registration)
@@ -122,13 +122,6 @@ def get_result_hash_for_pns result_sets
     "AVATAR" => '98593787308120460448886304499976840768878166060614499815391824681489593998420',
     "C_NAME" => '69611991539268867131500085835156593536513732089793432642972060827780580969128'
   }
-  #result_hash = {}
-  #temp_hash.map { |key, value|
-  #  dot_value = []
-  #  #dot_value = result_sets.select{ |e| e['keyHash'] == value }.last || nil
-  #  #dot_value = result_sets.select{ |e| e['keyHash'] == value }.last || ''
-  #  result_hash.store(key, (dot_value.last || ''))
-  #}
   result_hash = {}
   temp_hash.map { |key, value|
     dot_value = []
@@ -147,7 +140,7 @@ def get_result_hash_for_pns result_sets
 end
 
 def get_ens_json_result domains, registration
-  domains_resolved_address = domains['resolvedAddress']['domains'] rescue ''
+  domains_resolved_address = domains['resolvedAddress']['domains'] rescue nil
   result = {
     name: domains['name'],
     nameHash: "",
@@ -155,12 +148,6 @@ def get_ens_json_result domains, registration
     labelhash: domains['labelhash'],
     owner: domains['owner']['id'],
     parent: domains['parent']['id'],
-    subdomains: {
-      id: (domains['subdomains']['id'] rescue ''),
-      labelName: (domains['subdomains']['labelName'] rescue ''),
-      labelhash: (domains['subdomains']['labelhash'] rescue ''),
-      name: (domains['subdomains']['name'] rescue ''),
-    },
     subdomainCount: domains['subdomainCount'],
     resolvedAddress: {
       id: (domains['resolvedAddress']['id'] rescue ''),
@@ -179,6 +166,7 @@ def get_ens_json_result domains, registration
       pubkey: ''
     }
   }
+  return result
 end
 
 def get_pns_json_result result_domain, result_hash, registration
@@ -251,16 +239,18 @@ subdomain do
     #response.body
 
     if cid == ''
-      halt 404, 'page not found( seems not set content hash ) '
+      #halt 404, 'page not found( seems not set content hash ) '
+      redirect to("/https://#{subdomain}.site/")
     end
 
-    target_url = "#{IPFS_SITE_NAME}/ipfs/#{cid}"
-    logger.info "== content is: #{cid}, redirecting..#{target_url}"
+    target_url = "#{IPFS_SITE_NAME}"
+    #target_url = "#{IPFS_SITE_NAME}/ipfs/#{cid}"
+    logger.info "== cid is: #{cid}, redirecting..#{target_url}"
     redirect to(target_url)
   end
 end
 
-#subdomain :api do
+subdomain :api do
   get "/name/:name" do
     subdomain_type = params[:name].split('.').last
     case subdomain_type
@@ -270,6 +260,7 @@ end
       domains_labelhash = domains_labelhash
       registration = get_response_registration_for_ens domains['labelhash']
       result = get_ens_json_result(domains, registration)
+      result['subdomains'] = domains['subdomains'] if params['is_show_subdomains'] == 'yes'
       json({
         code: 1,
         message: 'success',
@@ -322,7 +313,7 @@ end
 
   end
 
-#end
+end
 
 get '/' do
   json result: 'hihi, you are visiting @ subdomain'
