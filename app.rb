@@ -239,12 +239,11 @@ subdomain do
     #response.body
 
     if cid == ''
-      #halt 404, 'page not found( seems not set content hash ) '
-      redirect to("/https://#{subdomain}.site/")
+      url = "https://#{subdomain.sub("eth", "dot")}.site/"
+      redirect to(url)
     end
 
-    target_url = "#{IPFS_SITE_NAME}"
-    #target_url = "#{IPFS_SITE_NAME}/ipfs/#{cid}"
+    target_url = "#{IPFS_SITE_NAME}/ipfs/#{cid}"
     logger.info "== cid is: #{cid}, redirecting..#{target_url}"
     redirect to(target_url)
   end
@@ -275,6 +274,9 @@ subdomain :api do
       result_hash = get_result_hash_for_pns result_sets
       result = get_pns_json_result result_domain, result_hash, registration
       logger.info "=== before add subdomains result : #{result}"
+      result_domain['subdomains'].each do |subdomain|
+        subdomain['owner'] = subdomain['owner']['id']
+      end
       result['subdomains'] = result_domain['subdomains'] if params['is_show_subdomains'] == 'yes'
       logger.info "=== after add subdomains result : #{result}"
 
