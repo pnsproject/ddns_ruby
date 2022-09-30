@@ -41,7 +41,7 @@ def get_ipfs_cid subdomain
         "query": "query MyQuery {\n  domains(where: {name: \"#{subdomain}\"}) {\n    id\n    labelName\n    name\n    resolver {\n      id\n    }\n  }\n}",
         "variables": nil,
         "operationName": "MyQuery",
-        "extensions":{"headers": nil}
+        "extensions": {"headers": nil}
       }
 
     resolver_id = JSON.parse(temp_result1)['data']['domains'][0]['resolver']['id']
@@ -50,7 +50,7 @@ def get_ipfs_cid subdomain
       body_in_hash: {
         "query": "query MyQuery {\n  resolver(\n    id: \"#{resolver_id}\"\n  ) {\n    contentHash\n  }\n}\n",
         "variables": nil,
-        "operationName":"MyQuery"
+        "operationName": "MyQuery"
       }
 
     content_hash = JSON.parse(temp_result2)['data']['resolver']['contentHash']
@@ -124,14 +124,9 @@ def get_result_hash_for_pns result_sets
   result_hash = {}
   temp_hash.map { |key, value|
     dot_value = []
-    result_sets.each { |e|
-      dot_value << e if e['keyHash'] == value
-      if dot_value.last == nil
-        hash = result_hash.store(key, '')
-      else
-        hash = result_hash.store(key, dot_value.last)
-      end
-    }
+    result_sets.each { |e| dot_value << e if e['keyHash'] == value }
+    dot_value = result_sets.select { |e| e['keyHash'] == value }.last || ''
+    result_hash.store(key, dot_value.last)
   }
   logger.info "=== temp_hash : #{temp_hash}"
   logger.info "=== result_hash: #{result_hash}"
