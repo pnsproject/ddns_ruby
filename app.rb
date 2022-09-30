@@ -125,8 +125,7 @@ def get_result_hash_for_pns result_sets
   temp_hash.map { |key, value|
     dot_value = []
     result_sets.each { |e| dot_value << e if e['keyHash'] == value }
-    dot_value = result_sets.select { |e| e['keyHash'] == value }.last || ''
-    result_hash.store(key, dot_value.last)
+    result_hash.store(key, (dot_value.last || ''))
   }
   logger.info "=== temp_hash : #{temp_hash}"
   logger.info "=== result_hash: #{result_hash}"
