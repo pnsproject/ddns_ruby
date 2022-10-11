@@ -136,16 +136,12 @@ def get_ens_json_result domains, registration
   domains_resolved_address = domains['resolvedAddress']['domains'] rescue nil
   result = {
     name: domains['name'],
-    nameHash: "",
+    nameHash: domains['id'],
     labelName: domains['labelName'],
     labelhash: domains['labelhash'],
     owner: domains['owner']['id'],
     parent: domains['parent']['id'],
     subdomainCount: domains['subdomainCount'],
-    resolvedAddress: {
-      id: (domains['resolvedAddress']['id'] rescue ''),
-      domains: domains_resolved_address,
-    },
     ttl: domains['ttl'],
     cost: registration['cost'],
     expiryDate: Time.at(registration['expiryDate'].to_i),
@@ -153,10 +149,10 @@ def get_ens_json_result domains, registration
     records: {
       contenthash: (domains['resolver']['contentHash'] rescue ''),
       eth: domains['owner']['id'],
-      dot: '',
-      btc: '',
+      dot: nil,
+      btc: nil,
       text: (domains['resolver']['texts'] rescue ''),
-      pubkey: ''
+      pubkey: nil
     }
   }
   return result
@@ -165,7 +161,7 @@ end
 def get_pns_json_result result_domain, result_hash, result_registration
   result = {
     name: result_domain['name'],
-    namehash: '',
+    namehash: result_domain['id'],
     labelName: result_domain['labelName'],
     labelhash: result_domain['labelhash'],
     owner: result_domain['owner']['id'],
@@ -174,17 +170,17 @@ def get_pns_json_result result_domain, result_hash, result_registration
     registrationDate: (Time.at(result_registration['events'][0]['triggeredDate'].to_i) rescue ''),
     subdomainCount: result_domain['subdomainCount'],
     records: {
-      DOT: (result_hash['DOT']['value'] rescue ''),
-      ETH: (result_hash['ETH']['value'] rescue ''),
-      BTC: (result_hash['BTC']['value'] rescue ''),
-      IPFS: (result_hash['IPFS']['value'] rescue ''),
-      Email: (result_hash['EMAIL']['value'] rescue ''),
-      Notice: (result_hash['NOTICE']['value'] rescue ''),
+      dot: (result_hash['DOT']['value'] rescue ''),
+      eth: (result_hash['ETH']['value'] rescue ''),
+      btc: (result_hash['BTC']['value'] rescue ''),
+      ipfs: (result_hash['IPFS']['value'] rescue ''),
+      email: (result_hash['EMAIL']['value'] rescue ''),
+      notice: (result_hash['NOTICE']['value'] rescue ''),
       twitter: (result_hash['TWITTER_COM']['value'] rescue ''),
       github: (result_hash['GITHUB']['value'] rescue ''),
-      Url: (result_hash['TWITTER_URL']['value'] rescue ''),
-      Avatar: (result_hash['AVATAR']['value'] rescue ''),
-      CNAME: (result_hash['C_NAME']['value'] rescue '')
+      url: (result_hash['TWITTER_URL']['value'] rescue ''),
+      avatar: (result_hash['AVATAR']['value'] rescue ''),
+      cname: (result_hash['C_NAME']['value'] rescue '')
     }
   }
 end
@@ -248,16 +244,16 @@ subdomain :api do
     case subdomain_type
     when 'eth'
       domains = get_result_for_ens params[:name]
-      logger.info "==domains #{domains}"
-      domains_labelhash = domains_labelhash
-      registration = get_response_registration_for_ens domains['labelhash']
-      result = get_ens_json_result(domains, registration)
-      result['subdomains'] = domains['subdomains'] if params['is_show_subdomains'] == 'yes'
-      json({
-        code: 1,
-        message: 'success',
-        result: result
-      })
+        logger.info "==domains #{domains}"
+        domains_labelhash = domains_labelhash
+        logger.info "====domains_labelhash #{domains_labelhash}"
+        registration = get_response_registration_for_ens domains['labelhash']
+        result = get_ens_json_result(domains, registration)
+        result['subdomains'] = domains['subdomains'] if params['is_show_subdomains'] == 'yes'
+        json({
+          result: 'ok',
+          data: result
+        })
 
     when 'dot'
       temp_result = get_result_for_pns params[:name]
@@ -274,9 +270,8 @@ subdomain :api do
       logger.info "=== after add subdomains result : #{result}"
 
       json({
-        code: 1,
-        message: 'success',
-        result: result
+        result: 'ok',
+        data: result
       })
     else
       'only support .eth, .dot domain'
@@ -300,10 +295,9 @@ subdomain :api do
     logger.info "result : #{result}"
 
     json({
-      code: 1,
-      message: 'success',
+      result: 'ok',
       address: address,
-      result: result
+      data: result
     })
 
   end
