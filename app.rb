@@ -127,7 +127,6 @@ def get_result_hash_for_pns result_sets
     result_sets.each { |e| dot_value << e if e['keyHash'] == value }
     result_hash.store(key, (dot_value.last || ''))
   }
-  logger.info "=== temp_hash : #{temp_hash}"
   logger.info "=== result_hash: #{result_hash}"
   return result_hash
 end
@@ -138,7 +137,7 @@ def get_ens_json_result domains, registration
     name: domains['name'],
     nameHash: domains['id'],
     labelName: domains['labelName'],
-    labelhash: domains['labelhash'],
+    labelHash: domains['labelhash'],
     owner: domains['owner']['id'],
     parent: domains['parent']['id'],
     subdomainCount: domains['subdomainCount'],
@@ -147,42 +146,42 @@ def get_ens_json_result domains, registration
     expiryDate: Time.at(registration['expiryDate'].to_i),
     registrationDate: Time.at(registration['registrationDate'].to_i),
     records: {
-      contenthash: (domains['resolver']['contentHash'] rescue ''),
+      contentHash: (domains['resolver']['contentHash'] rescue nil),
       eth: domains['owner']['id'],
       dot: nil,
       btc: nil,
-      text: (domains['resolver']['texts'] rescue ''),
+      text: (domains['resolver']['texts'] rescue nil),
       pubkey: nil
     }
-  }
+  } rescue []
   return result
 end
 
 def get_pns_json_result result_domain, result_hash, result_registration
   result = {
     name: result_domain['name'],
-    namehash: result_domain['id'],
+    nameHash: result_domain['id'],
     labelName: result_domain['labelName'],
-    labelhash: result_domain['labelhash'],
+    labelHash: result_domain['labelhash'],
     owner: result_domain['owner']['id'],
     parent: result_domain['parent']['id'],
-    expiryDate: (Time.at(result_registration['expiryDate'].to_i) rescue ''),
-    registrationDate: (Time.at(result_registration['events'][0]['triggeredDate'].to_i) rescue ''),
+    expiryDate: (Time.at(result_registration['expiryDate'].to_i) rescue nil),
+    registrationDate: (Time.at(result_registration['events'][0]['triggeredDate'].to_i) rescue nil),
     subdomainCount: result_domain['subdomainCount'],
     records: {
-      dot: (result_hash['DOT']['value'] rescue ''),
-      eth: (result_hash['ETH']['value'] rescue ''),
-      btc: (result_hash['BTC']['value'] rescue ''),
-      ipfs: (result_hash['IPFS']['value'] rescue ''),
-      email: (result_hash['EMAIL']['value'] rescue ''),
-      notice: (result_hash['NOTICE']['value'] rescue ''),
-      twitter: (result_hash['TWITTER_COM']['value'] rescue ''),
-      github: (result_hash['GITHUB']['value'] rescue ''),
-      url: (result_hash['TWITTER_URL']['value'] rescue ''),
-      avatar: (result_hash['AVATAR']['value'] rescue ''),
-      cname: (result_hash['C_NAME']['value'] rescue '')
+      dot: (result_hash['DOT']['value'] rescue nil),
+      eth: (result_hash['ETH']['value'] rescue nil),
+      btc: (result_hash['BTC']['value'] rescue nil),
+      ipfs: (result_hash['IPFS']['value'] rescue nil),
+      email: (result_hash['EMAIL']['value'] rescue nil),
+      notice: (result_hash['NOTICE']['value'] rescue nil),
+      twitter: (result_hash['TWITTER_COM']['value'] rescue nil),
+      github: (result_hash['GITHUB']['value'] rescue nil),
+      url: (result_hash['TWITTER_URL']['value'] rescue nil),
+      avatar: (result_hash['AVATAR']['value'] rescue nil),
+      cName: (result_hash['C_NAME']['value'] rescue nil)
     }
-  }
+  } rescue []
 end
 
 def result_for_reverse_ens address
@@ -206,7 +205,7 @@ def result_for_reverse_pns address
       "variables": nil
     }
   logger.info "===temp_result in pns#{temp_result}"
-  result = JSON.parse(temp_result)['data']['domains'].map{ |e| e["name"] } rescue ''
+  result = JSON.parse(temp_result)['data']['domains'].map{ |e| e["name"] } rescue []
   logger.info "===result in pns#{result}"
   return result
 end
@@ -244,16 +243,14 @@ subdomain :api do
     case subdomain_type
     when 'eth'
       domains = get_result_for_ens params[:name]
-        logger.info "==domains #{domains}"
-        domains_labelhash = domains_labelhash
-        logger.info "====domains_labelhash #{domains_labelhash}"
-        registration = get_response_registration_for_ens domains['labelhash']
-        result = get_ens_json_result(domains, registration)
-        result['subdomains'] = domains['subdomains'] if params['is_show_subdomains'] == 'yes'
-        json({
-          result: 'ok',
-          data: result
-        })
+      logger.info "==domains #{domains}"
+      registration = get_response_registration_for_ens domains['labelhash'] rescue nil
+      result = get_ens_json_result(domains, registration)
+      result['subdomains'] = domains['subdomains'] if params['is_show_subdomains'] == 'yes'
+      json({
+        result: 'ok',
+        data: result
+      })
 
     when 'dot'
       temp_result = get_result_for_pns params[:name]
@@ -263,8 +260,10 @@ subdomain :api do
       result_hash = get_result_hash_for_pns result_sets
       result = get_pns_json_result result_domain, result_hash, result_registration
       logger.info "=== before add subdomains result : #{result}"
-      result_domain['subdomains'].each do |subdomain|
-        subdomain['owner'] = subdomain['owner']['id']
+      if result_domain != nil
+        result_domain['subdomains'].each do |subdomain|
+          subdomain['owner'] = subdomain['owner']['id']
+        end
       end
       result['subdomains'] = result_domain['subdomains'] if params['is_show_subdomains'] == 'yes'
       logger.info "=== after add subdomains result : #{result}"
