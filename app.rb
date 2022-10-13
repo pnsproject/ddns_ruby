@@ -4,21 +4,32 @@ require 'sinatra/subdomain'
 require 'httparty'
 require 'date'
 require 'sinatra/custom_logger'
+require 'sinatra/cross_origin'
+
 require 'logger'
 
-set :logger, Logger.new('log.txt')
+set :logger, Logger.new('ddns_ruby.log')
+
+configure do
+  enable :cross_origin
+end
+
+BLANK_VALUE = nil
 # 修改这个即可， 例如 ddns.so,  test-ddns.com
 #SITE_NAME = "test-ddns.com"
 SITE_NAME = "ddns.so"
 
 #IPFS_SITE_NAME = "https://ipfsgate.#{SITE_NAME}"
 IPFS_SITE_NAME = ""
-ENS_SERVER_URL = 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens'
+#ENS_SERVER_URL = 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens'
 PNS_SERVER_URL = 'https://moonbeamgraph.test-pns-link.com/subgraphs/name/graphprotocol/pns'
+ENS_SERVER_URL = 'https://api.thegraph.com/subgraphs/name/ensdomains/ens'
+
 # 发起http post请求
 def post_request options
   server_url = options[:server_url]
   body_in_hash = options[:body_in_hash]
+  logger.info "== before post request to: server_url: #{server_url} body_in_hash: #{body_in_hash}"
 
   response = HTTParty.post server_url,
     :headers => { 'Content-Type' => 'application/json', 'Accept' => 'application/json'},
@@ -31,7 +42,7 @@ def post_request options
 end
 
 # 根据 domain的名字，例如 vitalik.eth 获得对应的ipfs cid
-def get_ipfs_cid subdomain
+def get_domain_ipfs_cid_form_domain_name subdomain
   subdomain_type = subdomain.split('.').last
   result = ''
   case subdomain_type
@@ -83,7 +94,7 @@ def get_result_for_ens name
   return domains
 end
 
-def get_response_registration_for_ens domains_labelhash
+def get_ens_domain_registration domains_labelhash
   response_registration = post_request server_url: ENS_SERVER_URL,
   body_in_hash: {
     "query": "query MyQuery {\n  registration(\n    id: \"#{domains_labelhash}\"\n  ) {\n    id\n    expiryDate\n    labelName\n    registrationDate\n    cost\n  }\n}",
@@ -97,7 +108,7 @@ def get_response_registration_for_ens domains_labelhash
   return registration
 end
 
-def get_result_for_pns name
+def get_temp_result_for_pns_domain name
   temp_result = post_request server_url: PNS_SERVER_URL,
     body_in_hash: {
       "operationName": "MyQuery",
@@ -107,24 +118,24 @@ def get_result_for_pns name
   return temp_result
 end
 
-def get_result_hash_for_pns result_sets
+def get_records_for_dot_domain temp_result_sets_to_get_records
   temp_hash = {
-    "DOT" => '70476024645083539914866120258902002044389822943217047784978736702069848167247',
-    "ETH" => '77201932000687051421874801696342701541816747065578039511607412978553675800564',
-    "BTC" => '105640063387051144792550451261497903460441457163918809975891088748950929433065',
-    "IPFS" => '109444936916467285377972213791356162468265265799777646334604004948560489512394',
-    "EMAIL" => '50101170924916254227885891120695131387383646459470231890507002477095918146885',
-    "NOTICE" => '31727182724036554852371956750201584211517824919105130426252222689897810866214',
-    "TWITTER_COM" => '11710898932869919534375710263824782355793106641910621555855312720536896315685',
-    "GITHUB" => '102576668688838416847107385580607409742813859881781246507337882384803237069874',
-    "TWITTER_URL" => '23368862207911262087635895660209245090921614897479706708279561601163163997039',
-    "AVATAR" => '98593787308120460448886304499976840768878166060614499815391824681489593998420',
-    "C_NAME" => '69611991539268867131500085835156593536513732089793432642972060827780580969128'
+    "dot" => '70476024645083539914866120258902002044389822943217047784978736702069848167247',
+    "eth" => '77201932000687051421874801696342701541816747065578039511607412978553675800564',
+    "btc" => '105640063387051144792550451261497903460441457163918809975891088748950929433065',
+    "ipfs" => '109444936916467285377972213791356162468265265799777646334604004948560489512394',
+    "email" => '50101170924916254227885891120695131387383646459470231890507002477095918146885',
+    "notice" => '31727182724036554852371956750201584211517824919105130426252222689897810866214',
+    "twitter_com" => '11710898932869919534375710263824782355793106641910621555855312720536896315685',
+    "github" => '102576668688838416847107385580607409742813859881781246507337882384803237069874',
+    "twitter_url" => '23368862207911262087635895660209245090921614897479706708279561601163163997039',
+    "avatar" => '98593787308120460448886304499976840768878166060614499815391824681489593998420',
+    "cname" => '69611991539268867131500085835156593536513732089793432642972060827780580969128'
   }
   result_hash = {}
   temp_hash.map { |key, value|
     dot_value = []
-    result_sets.each { |e| dot_value << e if e['keyHash'] == value }
+    temp_result_sets_to_get_records.each { |e| dot_value << e if e['keyHash'] == value }
     result_hash.store(key, (dot_value.last || ''))
   }
   logger.info "=== result_hash: #{result_hash}"
@@ -132,7 +143,7 @@ def get_result_hash_for_pns result_sets
 end
 
 def get_ens_json_result domains, registration
-  domains_resolved_address = domains['resolvedAddress']['domains'] rescue nil
+  domains_resolved_address = domains['resolvedAddress']['domains'] rescue BLANK_VALUE
   result = {
     name: domains['name'],
     nameHash: domains['id'],
@@ -145,46 +156,51 @@ def get_ens_json_result domains, registration
     cost: registration['cost'],
     expiryDate: Time.at(registration['expiryDate'].to_i),
     registrationDate: Time.at(registration['registrationDate'].to_i),
+    # 列出了 该eth地址 注册的其他 ens域名, 暂时隐藏
+    #resolvedAddress: {
+    #  id: (domains['resolvedAddress']['id'] rescue ''),
+    #  domains: domains_resolved_address,
+    #},
     records: {
-      contentHash: (domains['resolver']['contentHash'] rescue nil),
+      contentHash: (domains['resolver']['contentHash'] rescue BLANK_VALUE),
       eth: domains['owner']['id'],
-      dot: nil,
-      btc: nil,
-      text: (domains['resolver']['texts'] rescue nil),
-      pubkey: nil
+      dot: BLANK_VALUE,
+      btc: BLANK_VALUE,
+      text: (domains['resolver']['texts'] rescue BLANK_VALUE),
+      pubkey: BLANK_VALUE
     }
-  } rescue []
+  } rescue BLANK_VALUE
   return result
 end
 
-def get_pns_json_result result_domain, result_hash, result_registration
+def get_pns_json_result temp_result_domain, result_hash, result_registration
   result = {
-    name: result_domain['name'],
-    nameHash: result_domain['id'],
-    labelName: result_domain['labelName'],
-    labelHash: result_domain['labelhash'],
-    owner: result_domain['owner']['id'],
-    parent: result_domain['parent']['id'],
-    expiryDate: (Time.at(result_registration['expiryDate'].to_i) rescue nil),
-    registrationDate: (Time.at(result_registration['events'][0]['triggeredDate'].to_i) rescue nil),
-    subdomainCount: result_domain['subdomainCount'],
+    name: temp_result_domain['name'],
+    nameHash: temp_result_domain['id'],
+    labelName: temp_result_domain['labelName'],
+    labelHash: temp_result_domain['labelhash'],
+    owner: temp_result_domain['owner']['id'],
+    parent: temp_result_domain['parent']['id'],
+    expiryDate: (Time.at(result_registration['expiryDate'].to_i) rescue BLANK_VALUE),
+    registrationDate: (Time.at(result_registration['events'][0]['triggeredDate'].to_i) rescue BLANK_VALUE),
+    subdomainCount: temp_result_domain['subdomainCount'],
     records: {
-      dot: (result_hash['DOT']['value'] rescue nil),
-      eth: (result_hash['ETH']['value'] rescue nil),
-      btc: (result_hash['BTC']['value'] rescue nil),
-      ipfs: (result_hash['IPFS']['value'] rescue nil),
-      email: (result_hash['EMAIL']['value'] rescue nil),
-      notice: (result_hash['NOTICE']['value'] rescue nil),
-      twitter: (result_hash['TWITTER_COM']['value'] rescue nil),
-      github: (result_hash['GITHUB']['value'] rescue nil),
-      url: (result_hash['TWITTER_URL']['value'] rescue nil),
-      avatar: (result_hash['AVATAR']['value'] rescue nil),
-      cName: (result_hash['C_NAME']['value'] rescue nil)
+      dot: (result_hash['dot']['value'] rescue BLANK_VALUE),
+      eth: (result_hash['eth']['value'] rescue BLANK_VALUE),
+      btc: (result_hash['btc']['value'] rescue BLANK_VALUE),
+      ipfs: (result_hash['ipfs']['value'] rescue BLANK_VALUE),
+      email: (result_hash['email']['value'] rescue BLANK_VALUE),
+      notice: (result_hash['notice']['value'] rescue BLANK_VALUE),
+      twitter: (result_hash['twitter_com']['value'] rescue BLANK_VALUE),
+      github: (result_hash['github']['value'] rescue BLANK_VALUE),
+      url: (result_hash['twitter_url']['value'] rescue BLANK_VALUE),
+      avatar: (result_hash['avatar']['value'] rescue BLANK_VALUE),
+      cName: (result_hash['cname']['value'] rescue BLANK_VALUE)
     }
-  } rescue []
+  } rescue BLANK_VALUE
 end
 
-def result_for_reverse_ens address
+def get_ens_domain_names_form_address address
   temp_result = post_request server_url: ENS_SERVER_URL,
     body_in_hash: {
       "operationName": "MyQuery",
@@ -197,7 +213,7 @@ def result_for_reverse_ens address
   return result
 end
 
-def result_for_reverse_pns address
+def get_dot_domain_names_form_address address
   temp_result = post_request server_url: PNS_SERVER_URL,
     body_in_hash: {
       "operationName": "MyQuery",
@@ -207,6 +223,36 @@ def result_for_reverse_pns address
   logger.info "===temp_result in pns#{temp_result}"
   result = JSON.parse(temp_result)['data']['domains'].map{ |e| e["name"] } rescue []
   logger.info "===result in pns#{result}"
+  return result
+end
+
+def get_result_form_graphql_when_eth_domain name, is_show_subdomains
+  temp_domains = get_result_for_ens name
+  logger.info "==temp_domains #{temp_domains}"
+  logger.info "==is_show_subdomains #{is_show_subdomains}"
+  registration = get_ens_domain_registration temp_domains['labelhash'] rescue BLANK_VALUE
+  result = get_ens_json_result(temp_domains, registration)
+  result['subdomains'] = temp_domains['subdomains'] if is_show_subdomains == 'yes'
+  logger.info "=== after add subdomains result : #{result}"
+  return result
+end
+
+def get_result_form_graphql_when_dot_domain name, is_show_subdomains
+  temp_result = get_temp_result_for_pns_domain name
+  temp_result_domain = JSON.parse(temp_result)['data']['domains'][0]
+  temp_result_sets_to_get_records = JSON.parse(temp_result)['data']['sets']
+  result_registration = JSON.parse(temp_result)['data']['registrations'][0]
+  result_hash = get_records_for_dot_domain temp_result_sets_to_get_records
+  result = get_pns_json_result temp_result_domain, result_hash, result_registration
+  logger.info "=== before add subdomains result : #{result}"
+  logger.info "==is_show_subdomains #{is_show_subdomains}"
+  if temp_result_domain != nil
+    temp_result_domain['subdomains'].each do |subdomain|
+      subdomain['owner'] = subdomain['owner']['id']
+    end
+  end
+  result['subdomains'] = temp_result_domain['subdomains'] if is_show_subdomains == 'yes'
+  logger.info "=== after add subdomains result : #{result}"
   return result
 end
 
@@ -221,7 +267,7 @@ subdomain do
     logger.info "=== subdomain is: #{subdomain}"
     # 先获得content
     #
-    cid = get_ipfs_cid subdomain rescue ''
+    cid = get_domain_ipfs_cid_form_domain_name subdomain rescue ''
     # 然后在本地  ipfs gate 访问html content
     #response = HTTParty.get "http://localhost:8080/ipfs/#{content}"
     #response.body
@@ -239,35 +285,19 @@ end
 
 subdomain :api do
   get "/name/:name" do
-    subdomain_type = params[:name].split('.').last
+    name = params[:name]
+    is_show_subdomains = params[:is_show_subdomains]
+    subdomain_type = name.split('.').last
     case subdomain_type
     when 'eth'
-      domains = get_result_for_ens params[:name]
-      logger.info "==domains #{domains}"
-      registration = get_response_registration_for_ens domains['labelhash'] rescue nil
-      result = get_ens_json_result(domains, registration)
-      result['subdomains'] = domains['subdomains'] if params['is_show_subdomains'] == 'yes'
+      result = get_result_form_graphql_when_eth_domain name, is_show_subdomains
       json({
         result: 'ok',
         data: result
       })
 
     when 'dot'
-      temp_result = get_result_for_pns params[:name]
-      result_domain = JSON.parse(temp_result)['data']['domains'][0]
-      result_sets = JSON.parse(temp_result)['data']['sets']
-      result_registration = JSON.parse(temp_result)['data']['registrations'][0]
-      result_hash = get_result_hash_for_pns result_sets
-      result = get_pns_json_result result_domain, result_hash, result_registration
-      logger.info "=== before add subdomains result : #{result}"
-      if result_domain != nil
-        result_domain['subdomains'].each do |subdomain|
-          subdomain['owner'] = subdomain['owner']['id']
-        end
-      end
-      result['subdomains'] = result_domain['subdomains'] if params['is_show_subdomains'] == 'yes'
-      logger.info "=== after add subdomains result : #{result}"
-
+      result = get_result_form_graphql_when_dot_domain name, is_show_subdomains
       json({
         result: 'ok',
         data: result
@@ -287,9 +317,9 @@ subdomain :api do
     end
 
     if params[:type] == 'eth'
-      result = result_for_reverse_ens address
+      result = get_ens_domain_names_form_address address
     else
-      result = result_for_reverse_pns address
+      result = get_dot_domain_names_form_address address
     end
     logger.info "result : #{result}"
 
