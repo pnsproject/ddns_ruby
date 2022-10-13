@@ -6,6 +6,7 @@ require 'date'
 require 'sinatra/custom_logger'
 require 'sinatra/cross_origin'
 
+require 'eth'
 require 'logger'
 
 set :logger, Logger.new('ddns_ruby.log')
@@ -149,7 +150,7 @@ def get_ens_json_result domains, registration
     nameHash: domains['id'],
     labelName: domains['labelName'],
     labelHash: domains['labelhash'],
-    owner: domains['owner']['id'],
+    owner: eth_check_summed_address(domains['owner']['id']),
     parent: domains['parent']['id'],
     subdomainCount: domains['subdomainCount'],
     ttl: domains['ttl'],
@@ -163,7 +164,7 @@ def get_ens_json_result domains, registration
     #},
     records: {
       contentHash: (domains['resolver']['contentHash'] rescue BLANK_VALUE),
-      eth: domains['owner']['id'],
+      eth: eth_check_summed_address(domains['owner']['id']),
       dot: BLANK_VALUE,
       btc: BLANK_VALUE,
       text: (domains['resolver']['texts'] rescue BLANK_VALUE),
@@ -173,20 +174,31 @@ def get_ens_json_result domains, registration
   return result
 end
 
+def eth_check_summed_address address
+  temp = Eth::Address.new address
+  logger.info "== address #{address} is valid? #{temp.valid? }"
+  result = ''
+  if temp.valid?
+    result = temp.checksummed
+  else
+    result = "#{address}(invalid)"
+  end
+end
+
 def get_pns_json_result temp_result_domain, result_hash, result_registration
   result = {
     name: temp_result_domain['name'],
     nameHash: temp_result_domain['id'],
     labelName: temp_result_domain['labelName'],
     labelHash: temp_result_domain['labelhash'],
-    owner: temp_result_domain['owner']['id'],
+    owner: eth_check_summed_address(temp_result_domain['owner']['id']),
     parent: temp_result_domain['parent']['id'],
     expiryDate: (Time.at(result_registration['expiryDate'].to_i) rescue BLANK_VALUE),
     registrationDate: (Time.at(result_registration['events'][0]['triggeredDate'].to_i) rescue BLANK_VALUE),
     subdomainCount: temp_result_domain['subdomainCount'],
     records: {
       dot: (result_hash['dot']['value'] rescue BLANK_VALUE),
-      eth: (result_hash['eth']['value'] rescue BLANK_VALUE),
+      eth: (eth_check_summed_address(result_hash['eth']['value']) rescue BLANK_VALUE),
       btc: (result_hash['btc']['value'] rescue BLANK_VALUE),
       ipfs: (result_hash['ipfs']['value'] rescue BLANK_VALUE),
       email: (result_hash['email']['value'] rescue BLANK_VALUE),

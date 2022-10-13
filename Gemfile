@@ -8,4 +8,6 @@ gem 'pg'
 gem 'rake'
 gem 'puma'
 
+gem 'eth'
 gem 'httparty'
+
