@@ -10,6 +10,7 @@ require 'eth'
 require 'logger'
 
 set :logger, Logger.new('ddns_ruby.log')
+disable :show_exceptions
 
 configure do
   enable :cross_origin
