@@ -11,6 +11,7 @@ require 'logger'
 require 'active_record'
 
 set :logger, Logger.new('ddns_ruby.log')
+disable :show_exceptions
 
 configure do
   enable :cross_origin
