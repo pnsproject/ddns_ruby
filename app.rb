@@ -282,6 +282,32 @@ subdomain [:www, nil] do
   end
 end
 
+# example:
+# nft_id: 0xcc942b3e781ca36eba0d59bb1afc88cc1ff0d1b7dc54c5aba3c112f4387b6e23
+# return:
+# {
+#  "data": {
+#    "domains": [
+#      {
+#        "id": "0xcc942b3e781ca36eba0d59bb1afc88cc1ff0d1b7dc54c5aba3c112f4387b6e23",
+#        "name": "ttt112.dot"
+#      }
+#    ]
+#  }
+# }
+def get_domain_name_by_nft_id nft_id
+
+  temp_result = post_request server_url: PNS_SERVER_URL,
+    body_in_hash: {
+      "query":"query MyQuery {\n  domains(\n    where: {id: \"#{nft_id}\"}\n  ) {\n    id\n    name\n    labelhash\n    labelName\n  }\n}\n",
+      "variables": nil,
+      "operationName":"MyQuery"
+    }
+
+  result = JSON.parse(temp_result)['data']['domains'][0]['name'] rescue nil
+  return result
+end
+
 def display_the_logic_of_the_page cid, subdomain
   logger.info "=== subdomain is: #{subdomain} cid #{cid}"
   if cid != '' && cid != nil
@@ -359,6 +385,25 @@ subdomain :api do
       data: result
     })
 
+  end
+
+  # 根据 nft_id  获得某个域名的信息
+  get '/query_by_nft_id/:type/:nft_id' do
+    result = nil
+    domain_name = nil
+    case params[:type]
+    when 'pns'
+      result = {
+        result: 'ok',
+        data: get_domain_name_by_nft_id(params[:nft_id])
+      }
+    else
+      result = {
+        result: 'not support',
+        data: nil
+      }
+    end
+    json(result)
   end
 
 end
