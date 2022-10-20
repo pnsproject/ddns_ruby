@@ -94,6 +94,27 @@ def get_domain_ipfs_cid_form_domain_name subdomain
   return result
 end
 
+# 根据ETH地址进行ENS的反向解析
+def reverse_by_ens_name address
+  command = "node reverse_name.js #{address}"
+  result = `#{command}`
+  logger.info result
+  return result
+end
+
+def reverse_by_pns_name address
+  temp_result = post_request server_url: PNS_SERVER_URL,
+    body_in_hash: {
+      "query": "query MyQuery {\n  setNames(\n    first: 1\n    where: {account: \"#{address}\"}\n    orderBy: blockNumber\n    orderDirection: desc\n  ) {\n    account {\n      id\n    }\n    tokenId {\n      id\n      name\n    }\n  }\n}",
+      "operationName": "MyQuery",
+      "variables": nil
+    }
+  logger.info temp_result
+  result = JSON.parse(temp_result)['data']['setNames'][0]['tokenId']['name'] rescue BLANK_VALUE
+  logger.info "temp_result is #{temp_result} result reverse_pns_name is #{result}"
+  return result
+end
+
 #用来从graphql获取某个ens域名的数据
 def get_data_of_ens_domain_name name
   response = post_request server_url: ENS_SERVER_URL,
@@ -293,7 +314,6 @@ end
 #  }
 # }
 def get_domain_name_by_nft_id nft_id
-
   temp_result = post_request server_url: PNS_SERVER_URL,
     body_in_hash: {
       "query":"query MyQuery {\n  domains(\n    where: {id: \"#{nft_id}\"}\n  ) {\n    id\n    name\n    labelhash\n    labelName\n  }\n}\n",
@@ -329,6 +349,7 @@ def display_the_logic_of_the_page cid, subdomain
   redirect to(url)
 end
 
+
 subdomain do
   get '/' do
     cid = get_domain_ipfs_cid_form_domain_name subdomain rescue ''
@@ -361,14 +382,37 @@ subdomain :api do
 
   end
 
-  get '/reverse/:address' do
-
+  # type参数：可用的是  ens/pns
+  # 使用例子：  /reverse/ens/0xa1b2c3d4
+  # 使用例子：  /reverse/pns/0xa1b2c3d4
+  # 根据某个地址，找到它的所有的注册的域名
+  get '/reverse/:type/:address' do
     address = params[:address]
-
     if address == nil || address == ''
       halt 404, 'page not found(address is missing) '
     end
+    result = nil
+    if params[:type] == 'ens'
+      result = reverse_by_ens_name address rescue BLANK_VALUE
+    else
+      result = reverse_by_pns_name address rescue BLANK_VALUE
+    end
+    logger.info "result : #{result}"
 
+    json({
+      result: 'ok',
+      address: address,
+      data: result
+    })
+
+  end
+
+
+  get '/get_all_domain_names/:address' do
+    address = params[:address]
+    if address == nil || address == ''
+      halt 404, 'page not found(address is missing) '
+    end
     if params[:type] == 'eth'
       data = get_ens_domain_names_form_address address
     else
@@ -381,7 +425,6 @@ subdomain :api do
       address: address,
       data: data
     })
-
   end
 
   # 根据 nft_id  获得某个域名的信息
