@@ -13,10 +13,9 @@ async function reverse(address) {
 
 async function main(){
   var myArgs = process.argv.slice(2);
-  console.log('myArgs: ', myArgs[0]);
 
   let name = await reverse(myArgs[0]);
-  console.info("== name is: ", name)
+  console.info(name)
 }
 
 main()

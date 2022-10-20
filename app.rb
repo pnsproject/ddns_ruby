@@ -97,8 +97,8 @@ end
 # 根据ETH地址进行ENS的反向解析
 def reverse_by_ens_name address
   command = "node reverse_name.js #{address}"
-  result = `#{command}`
-  logger.info result
+  temp_result = `#{command}`
+  result = temp_result.sub("\n", "")
   return result
 end
 
