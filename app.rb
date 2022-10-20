@@ -147,13 +147,13 @@ end
 
 #用来从graphql获得某个pns域名的数据
 def get_the_data_of_an_pns_domain_name_from_graphql name
-  temp_result = post_request server_url: PNS_SERVER_URL,
+  result = post_request server_url: PNS_SERVER_URL,
     body_in_hash: {
       "operationName": "MyQuery",
       "query": "query MyQuery {\n  domains(where: {name: \"#{name}\"}) {\n    labelhash\n    labelName\n    id\n    name\n    subdomains {\n      name\n      owner {\n        id\n      }\n    }\n    subdomainCount\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n  }\n  sets(where: {domain_: {name: \"#{name}\"}}) {\n    id\n    keyHash\n    value\n  }\n  registrations(where: {labelName: \"#{name.sub(".dot", '')}\"}) {\n    expiryDate\n    events {\n      id\n      triggeredDate\n    }\n  }\n}\n",
       "variables": nil
     }
-  return temp_result
+  return result
 end
 
 def get_records_for_dot_domain temp_result_sets_to_get_records
@@ -213,13 +213,13 @@ def get_final_result_of_ens_domain data_of_ens_domain_name, registration_data_of
 end
 
 #获取pns域名的最终结果
-def get_pns_json_result temp_result_domain, records_of_pns_domain, registration_data_of_pns_domain
+def get_pns_json_result temp_result_domain, records_of_pns_domain, registration_data_of_pns_domain, owner_address
   result = {
     name: temp_result_domain['name'],
     nameHash: temp_result_domain['id'],
     labelName: temp_result_domain['labelName'],
     labelHash: temp_result_domain['labelhash'],
-    owner: eth_check_summed_address(temp_result_domain['owner']['id']),
+    owner: (owner_address rescue BLANK_VALUE),
     parent: temp_result_domain['parent']['id'],
     expiryDate: (Time.at(registration_data_of_pns_domain['expiryDate'].to_i) rescue BLANK_VALUE),
     registrationDate: (Time.at(registration_data_of_pns_domain['events'][0]['triggeredDate'].to_i) rescue BLANK_VALUE),
@@ -279,10 +279,11 @@ end
 def get_result_form_graphql_when_pns_domain name, is_show_subdomains
   temp_result = get_the_data_of_an_pns_domain_name_from_graphql name
   data_of_an_pns_domain_name = JSON.parse(temp_result)['data']['domains'][0]
+  owner_address = data_of_an_pns_domain_name['owner']['id'] rescue BLANK_VALUE
   temp_result_sets_to_get_records = JSON.parse(temp_result)['data']['sets']
   registration_data_of_pns_domain = JSON.parse(temp_result)['data']['registrations'][0]
   records_of_pns_domain = get_records_for_dot_domain temp_result_sets_to_get_records
-  result = get_pns_json_result data_of_an_pns_domain_name, records_of_pns_domain, registration_data_of_pns_domain
+  result = get_pns_json_result data_of_an_pns_domain_name, records_of_pns_domain, registration_data_of_pns_domain, owner_address
   logger.info "=== is_show_subdomains #{is_show_subdomains} before add subdomains result : #{result}"
   if data_of_an_pns_domain_name != nil
     data_of_an_pns_domain_name['subdomains'].each do |subdomain|
@@ -406,7 +407,6 @@ subdomain :api do
     })
 
   end
-
 
   get '/get_all_domain_names/:address' do
     address = params[:address]
