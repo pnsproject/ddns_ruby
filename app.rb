@@ -54,32 +54,34 @@ def post_request options
   return result
 end
 
+#用来从graphql获取某个ens域名的数据
+def get_data_of_ens_domain_name name
+  response = post_request server_url: ENS_SERVER_URL,
+  body_in_hash: {
+    "query":"query MyQuery {\n  domains(where: {name: \"#{name}\"}) {\n    id\n    labelName\n    name\n    labelhash\n    subdomains {\n      id\n      name\n      subdomains {\n        name\n        labelhash\n        labelName\n      }\n    }\n    subdomainCount\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n    resolvedAddress {\n      id\n      domains {\n        labelName\n        labelhash\n        name\n      }\n    }\n    ttl\n\t\tresolver {\n\t\t  id\n      contentHash\n      texts\n      address\n      coinTypes\n\t\t}\n  }\n}\n",
+    "variables": nil,
+    "operationName": "MyQuery"
+  }
+  logger.info "== response: #{response}"
+  body = JSON.parse(response)
+  data_of_ens_domain_name = body['data']['domains'][0]
+  logger.info "===domains #{data_of_ens_domain_name}"
+  return data_of_ens_domain_name
+end
+
 # 根据 domain的名字，例如 vitalik.eth 获得对应的ipfs cid
-def get_domain_ipfs_cid_form_domain_name subdomain
-  logger.info "==== in get_domain_ipfs_cid_form_domain_name"
+def get_domain_ipfs_cid_from_domain_name subdomain
+  logger.info "==== in get_domain_ipfs_cid_from_domain_name"
   subdomain_type = subdomain.split('.').last
   result = ''
   case subdomain_type
   when 'eth'
-    temp_result = post_request server_url: ENS_SERVER_URL,
-      body_in_hash: {
-        "query": "query MyQuery {\n  domains(where: {name: \"#{subdomain}\"}) {\n    id\n    labelName\n    name\n    resolver {\n      id\n    }\n  }\n}",
-        "variables": nil,
-        "operationName": "MyQuery",
-        "extensions": {"headers": nil}
-      }
-
-    resolver_id = JSON.parse(temp_result1)['data']['domains'][0]['resolver']['id']
-    temp_result2 = post_request server_url: 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens',
-      body_in_hash: {
-        "query": "query MyQuery {\n  resolver(\n    id: \"#{resolver_id}\"\n  ) {\n    contentHash\n  }\n}\n",
-        "variables": nil,
-        "operationName": "MyQuery"
-      }
-    content_hash = JSON.parse(temp_result2)['data']['resolver']['contentHash']
+    temp_result = get_data_of_ens_domain_name subdomain
+    content_hash = temp_result['resolver']['contentHash'] rescue BLANK_VALUE
+    logger.info "=== content_hash: #{content_hash}"
     command = "node get_ipfs_cid.js #{content_hash}"
+    logger.info "== command: #{command}"
     result = `#{command}`
-    logger.info result
   when 'dot'
     temp_result = get_temp_result_for_pns_domain subdomain
     temp_result_domain = JSON.parse(temp_result)['data']['domains'][0]
@@ -91,6 +93,7 @@ def get_domain_ipfs_cid_form_domain_name subdomain
   else
     raise 'only support .eth, .dot domain'
   end
+  logger.info "======   result: #{result}"
   return result
 end
 
@@ -115,20 +118,6 @@ def reverse_by_pns_name address
   return result
 end
 
-#用来从graphql获取某个ens域名的数据
-def get_data_of_ens_domain_name name
-  response = post_request server_url: ENS_SERVER_URL,
-  body_in_hash: {
-    "query":"query MyQuery {\n  domains(where: {name: \"#{name}\"}) {\n    id\n    labelName\n    name\n    labelhash\n    subdomains {\n      id\n      name\n      subdomains {\n        name\n        labelhash\n        labelName\n      }\n    }\n    subdomainCount\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n    resolvedAddress {\n      id\n      domains {\n        labelName\n        labelhash\n        name\n      }\n    }\n    ttl\n\t\tresolver {\n\t\t  id\n      contentHash\n      texts\n      address\n      coinTypes\n\t\t}\n  }\n}\n",
-    "variables": nil,
-    "operationName": "MyQuery"
-  }
-  logger.info "== response: #{response}"
-  body = JSON.parse(response)
-  data_of_ens_domain_name = body['data']['domains'][0]
-  logger.info "===domains #{data_of_ens_domain_name}"
-  return data_of_ens_domain_name
-end
 
 #获得ens域名的注册时间和到期时间
 def get_registration_time_and_expiration_time_of_ens_domain_name domains_labelhash
@@ -240,7 +229,7 @@ def get_pns_json_result temp_result_domain, records_of_pns_domain, registration_
   } rescue BLANK_VALUE
 end
 
-def get_ens_domain_names_form_address address
+def get_ens_domain_names_from_address address
   temp_result = post_request server_url: ENS_SERVER_URL,
     body_in_hash: {
       "operationName": "MyQuery",
@@ -253,7 +242,7 @@ def get_ens_domain_names_form_address address
   return result
 end
 
-def get_pns_domain_names_form_address address
+def get_pns_domain_names_from_address address
   temp_result = post_request server_url: PNS_SERVER_URL,
     body_in_hash: {
       "operationName": "MyQuery",
@@ -266,7 +255,7 @@ def get_pns_domain_names_form_address address
   return result
 end
 
-def get_result_form_graphql_when_ens_domain name, is_show_subdomains
+def get_result_from_graphql_when_ens_domain name, is_show_subdomains
   temp_data_of_ens_domain_name = get_data_of_ens_domain_name name
   logger.info "==temp_data_of_ens_domain_name #{temp_data_of_ens_domain_name} is_show_subdomains #{is_show_subdomains}"
   temp_registration_data_of_ens_domain = get_registration_time_and_expiration_time_of_ens_domain_name temp_data_of_ens_domain_name['labelhash'] rescue BLANK_VALUE
@@ -276,7 +265,7 @@ def get_result_form_graphql_when_ens_domain name, is_show_subdomains
   return result
 end
 
-def get_result_form_graphql_when_pns_domain name, is_show_subdomains
+def get_result_from_graphql_when_pns_domain name, is_show_subdomains
   temp_result = get_the_data_of_an_pns_domain_name_from_graphql name
   data_of_an_pns_domain_name = JSON.parse(temp_result)['data']['domains'][0]
   owner_address = data_of_an_pns_domain_name['owner']['id'] rescue BLANK_VALUE
@@ -353,7 +342,7 @@ end
 
 subdomain do
   get '/' do
-    cid = get_domain_ipfs_cid_form_domain_name subdomain rescue ''
+    cid = get_domain_ipfs_cid_from_domain_name subdomain rescue ''
     display_the_logic_of_the_page cid, subdomain
   end
 end
@@ -365,14 +354,14 @@ subdomain :api do
     subdomain_type = name.split('.').last
     case subdomain_type
     when 'eth'
-      data = get_result_form_graphql_when_ens_domain name, is_show_subdomains
+      data = get_result_from_graphql_when_ens_domain name, is_show_subdomains
       json({
         result: 'ok',
         data: data
       })
 
     when 'dot'
-      data = get_result_form_graphql_when_pns_domain name, is_show_subdomains
+      data = get_result_from_graphql_when_pns_domain name, is_show_subdomains
       json({
         result: 'ok',
         data: data
@@ -414,9 +403,9 @@ subdomain :api do
       halt 404, 'page not found(address is missing) '
     end
     if params[:type] == 'eth'
-      data = get_ens_domain_names_form_address address
+      data = get_ens_domain_names_from_address address
     else
-      data = get_pns_domain_names_form_address address
+      data = get_pns_domain_names_from_address address
     end
     logger.info "data : #{data}"
 
