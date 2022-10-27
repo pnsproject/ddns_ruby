@@ -284,12 +284,6 @@ def get_result_from_graphql_when_pns_domain name, is_show_subdomains
   return result
 end
 
-subdomain [:www, nil] do
-  get '/' do
-    json result: "Hi there~, subdomain is: #{subdomain}"
-  end
-end
-
 # example:
 # nft_id: 0xcc942b3e781ca36eba0d59bb1afc88cc1ff0d1b7dc54c5aba3c112f4387b6e23
 # return:
@@ -340,6 +334,13 @@ def display_the_logic_of_the_page cid, subdomain
 end
 
 
+subdomain [:www, nil] do
+  get '/' do
+    json result: "Hi there~, subdomain is: #{subdomain}"
+  end
+end
+
+# 处理 ens, pns
 subdomain do
   get '/' do
     cid = get_domain_ipfs_cid_from_domain_name subdomain rescue ''
@@ -440,4 +441,40 @@ end
 get '/' do
   json result: 'hihi, you are visiting @ subdomain'
 end
+
+get '/ipfs/*' do
+
+  logger.info "== request.referer: #{request.referrer}, inspect: #{request.referrer == nil}"
+
+  url = ''
+  if request.referrer != nil
+    url = request.referrer + request.fullpath.gsub('/ipfs', '')
+  else
+    url = "https://cloudflare-ipfs.com/" + request.fullpath
+  end
+
+  logger.info "=== url is: #{url}"
+  response = HTTParty.get url
+  #logger.info "=== response.headers is #{response.headers}"
+
+
+  status 200
+  temp_headers = response.headers
+  temp_headers.each do |key|
+    if key.match(/ipfs|access-control|etag|cf-/i)
+      temp_headers.delete(key)
+    end
+  end
+
+  logger.info "== response.headers: #{temp_headers.inspect}"
+
+  my_headers = {'content-type' => temp_headers['content-type']}
+
+  headers my_headers
+  # 这里必须要做这一步。 否则不行。
+  response_body = response.body
+
+  body response.body
+end
+
 
