@@ -28,7 +28,6 @@ KYPE_IPFS = 3
 class Record < ActiveRecord::Base
 end
 
-puts "===Record.all.size #{Record.all.size}"
 
 BLANK_VALUE = nil
 # 修改这个即可， 例如 ddns.so,  test-ddns.com
@@ -39,6 +38,13 @@ IPFS_SITE_NAME = ""
 #ENS_SERVER_URL = 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens'
 PNS_SERVER_URL = 'https://moonbeamgraph.test-pns-link.com/subgraphs/name/graphprotocol/pns'
 ENS_SERVER_URL = 'https://api.thegraph.com/subgraphs/name/ensdomains/ens'
+
+# 我们约定它的 key 都是 string 类型
+# 例如 @cache['bitsofcode.eth'] = 'QmfFjVBz5wd66kyd89RWkJJiWEMq1Fde3XGN9MBfx47Btp'
+def my_cache
+  @cache = {} if @cache == nil
+  return @cache
+end
 
 # 发起http post请求
 def post_request options
@@ -94,6 +100,8 @@ def get_domain_ipfs_cid_from_domain_name subdomain
     raise 'only support .eth, .dot domain'
   end
   logger.info "======   result: #{result}"
+  result = result.strip
+  my_cache[subdomain] = result
   return result
 end
 
@@ -309,11 +317,42 @@ def get_domain_name_by_nft_id nft_id
   return result
 end
 
+# 确定显示逻辑。
 def display_the_logic_of_the_page cid, subdomain
-  logger.info "=== subdomain is: #{subdomain} cid #{cid}"
+  logger.info "=== subdomain: #{subdomain} cid: #{cid}"
+
+  # step1. 如果有cid, 就展示内容
   if cid != '' && cid != nil
-    url = "#{IPFS_SITE_NAME}/ipfs/#{cid}"
-    logger.info "== cid is: #{cid}, redirecting..#{url}"
+    #url = "#{IPFS_SITE_NAME}/ipfs/#{cid}"
+    logger.info "== cid: #{cid}"
+    logger.info "== request.referer: #{request.referrer}, inspect: #{request.referrer == nil}"
+
+    url = ''
+
+    # referrer: 基本就是 nil 或者
+    #
+    # e.g. https://bitsofcode.eth.ddns.so/
+    if request.referrer != nil
+      # TODO 这里不用了
+      # 传入的应该是 vitalik.eth.ddns.so/css/a.css   所以 fullpath = css/a.css
+      #url = request.referrer + request.fullpath.gsub('/ipfs', '')
+      url = request.referrer + request.fullpath.gsub('/ipfs', '')
+    else
+      url = "https://cloudflare-ipfs.com/" + "ipfs/" + cid
+    end
+
+    logger.info "=== url is: #{url}"
+    response = HTTParty.get url
+
+    status 200
+
+    # 这里特别重要
+    my_headers = {'content-type' => response.headers['content-type']}
+    headers my_headers
+    logger.info "== -- body: #{response.body}"
+    body response.body
+    # 这个return也是必须的
+    return
 
   # step2.如果域名有cname, 就展示
   elsif (record_cname = Record.where('domain_name = ? and record_type = ?', subdomain, KYPE_CNAME).first) && record_cname.present?
@@ -337,6 +376,24 @@ def display_the_logic_of_the_page cid, subdomain
   redirect to(url)
 end
 
+def display_css_js_files cid
+  logger.info "== in display_css_js_files: cid: #{cid}"
+  logger.info "== request.referer: #{request.referrer}, inspect: #{request.referrer == nil}"
+
+  url = "https://cloudflare-ipfs.com/" + "ipfs/" + cid + request.fullpath
+
+  logger.info "=== url is: #{url}"
+  response = HTTParty.get url
+
+  status 200
+
+  # 这里特别重要
+  my_headers = {'content-type' => response.headers['content-type']}
+  headers my_headers
+  logger.info "== -- body: #{response.body[1..100]}"
+  body response.body
+end
+
 # 用于解决浏览器的报错问题
 get '/favicon.ico' do
   send_file 'favicon.ico'
@@ -352,9 +409,14 @@ end
 # 用来访问 vitalik.eth.ddns.so
 # 处理 ens, pns
 subdomain do
-  get '/' do
+  get '/*' do
+
     cid = get_domain_ipfs_cid_from_domain_name subdomain rescue ''
-    display_the_logic_of_the_page cid, subdomain
+    if request.fullpath == '/'
+      display_the_logic_of_the_page cid, subdomain
+    else
+      display_css_js_files cid
+    end
   end
 
   get '/ipfs/*' do
