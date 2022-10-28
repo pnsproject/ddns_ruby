@@ -314,40 +314,73 @@ def display_the_logic_of_the_page cid, subdomain
   if cid != '' && cid != nil
     url = "#{IPFS_SITE_NAME}/ipfs/#{cid}"
     logger.info "== cid is: #{cid}, redirecting..#{url}"
-    # step2.如果域名有cname, 就展示
+
+  # step2.如果域名有cname, 就展示
   elsif (record_cname = Record.where('domain_name = ? and record_type = ?', subdomain, KYPE_CNAME).first) && record_cname.present?
     url = "https://#{record_cname.content}"
     logger.info "=== url #{url} record_cname is #{record_cname.inspect}"
-    # step3.如果域名有A记录, 就展示
+
+  # step3.如果域名有A记录, 就展示
   elsif (record_a = Record.where('domain_name = ? and record_type = ?', subdomain, KYPE_A).first) && record_a.present?
     url = "https://#{record_a.content}"
     logger.info "=== url #{url} record_a is #{record_a.inspect}"
-    # step4.如果域名有ipfs, 就展示
+
+  # step4.如果域名有ipfs, 就展示
   elsif (record_ipfs = Record.where('domain_name = ? and record_type = ?', subdomain, KYPE_IPFS).first) && record_ipfs.present?
     url = record_ipfs.content
     logger.info "=== record_ipfs is #{record_ipfs.inspect} url #{url}"
-    # step5.如果都没有，就展示web3profile页面
+
+  # step5.如果都没有，就展示web3profile页面
   else
     url = "https://#{subdomain.sub("eth", "dot")}.site/"
   end
   redirect to(url)
 end
 
+# 用于解决浏览器的报错问题
+get '/favicon.ico' do
+  send_file 'favicon.ico'
+end
 
+# 用来访问 www.ddns.so , ddns.so
 subdomain [:www, nil] do
   get '/' do
     json result: "Hi there~, subdomain is: #{subdomain}"
   end
 end
 
+# 用来访问 vitalik.eth.ddns.so
 # 处理 ens, pns
 subdomain do
   get '/' do
     cid = get_domain_ipfs_cid_from_domain_name subdomain rescue ''
     display_the_logic_of_the_page cid, subdomain
   end
+
+  get '/ipfs/*' do
+    logger.info "== request.referer: #{request.referrer}, inspect: #{request.referrer == nil}"
+
+    url = ''
+    if request.referrer != nil
+      url = request.referrer + request.fullpath.gsub('/ipfs', '')
+    else
+      url = "https://cloudflare-ipfs.com/" + request.fullpath
+    end
+
+    logger.info "=== url is: #{url}"
+    response = HTTParty.get url
+
+    status 200
+
+    # 这里特别重要
+    my_headers = {'content-type' => response.headers['content-type']}
+    headers my_headers
+
+    body response.body
+  end
 end
 
+# 对于 api.ddns.so 的配置
 subdomain :api do
   get "/name/:name" do
     name = params[:name]
@@ -398,6 +431,10 @@ subdomain :api do
 
   end
 
+  # 根据某个地址获得该地址的所有 域名（ens + pns)
+  # 参数：
+  # address: 地址
+  # type: 地址的类型，目前仅支持 eth, pns
   get '/get_all_domain_names/:address' do
     address = params[:address]
     if address == nil || address == ''
@@ -438,43 +475,5 @@ subdomain :api do
 
 end
 
-get '/' do
-  json result: 'hihi, you are visiting @ subdomain'
-end
-
-get '/ipfs/*' do
-
-  logger.info "== request.referer: #{request.referrer}, inspect: #{request.referrer == nil}"
-
-  url = ''
-  if request.referrer != nil
-    url = request.referrer + request.fullpath.gsub('/ipfs', '')
-  else
-    url = "https://cloudflare-ipfs.com/" + request.fullpath
-  end
-
-  logger.info "=== url is: #{url}"
-  response = HTTParty.get url
-  #logger.info "=== response.headers is #{response.headers}"
-
-
-  status 200
-  temp_headers = response.headers
-  temp_headers.each do |key|
-    if key.match(/ipfs|access-control|etag|cf-/i)
-      temp_headers.delete(key)
-    end
-  end
-
-  logger.info "== response.headers: #{temp_headers.inspect}"
-
-  my_headers = {'content-type' => temp_headers['content-type']}
-
-  headers my_headers
-  # 这里必须要做这一步。 否则不行。
-  response_body = response.body
-
-  body response.body
-end
 
 
