@@ -399,48 +399,6 @@ get '/favicon.ico' do
   send_file 'favicon.ico'
 end
 
-# 用来访问 www.ddns.so , ddns.so
-subdomain [:www, nil] do
-  get '/' do
-    json result: "Hi there~, subdomain is: #{subdomain}"
-  end
-end
-
-# 用来访问 vitalik.eth.ddns.so
-# 处理 ens, pns
-subdomain do
-  get '/*' do
-
-    cid = get_domain_ipfs_cid_from_domain_name subdomain rescue ''
-    if request.fullpath == '/'
-      display_the_logic_of_the_page cid, subdomain
-    else
-      display_css_js_files cid
-    end
-  end
-
-  get '/ipfs/*' do
-    logger.info "== request.referer: #{request.referrer}, inspect: #{request.referrer == nil}"
-
-    url = ''
-    if request.referrer != nil
-      url = request.referrer + request.fullpath.gsub('/ipfs', '')
-    else
-      url = "https://cloudflare-ipfs.com/" + request.fullpath
-    end
-
-    logger.info "=== url is: #{url}"
-    response = HTTParty.get url
-
-    status 200
-
-    # 这里特别重要
-    my_headers = {'content-type' => response.headers['content-type']}
-    headers my_headers
-
-    body response.body
-  end
-end
 
 # 对于 api.ddns.so 的配置
 subdomain :api do
@@ -536,6 +494,51 @@ subdomain :api do
   end
 
 end
+
+
+# 用来访问 www.ddns.so , ddns.so
+subdomain [:www, nil] do
+  get '/' do
+    json result: "Hi there~, subdomain is: #{subdomain}"
+  end
+end
+
+# 用来访问 vitalik.eth.ddns.so
+# 处理 ens, pns
+subdomain do
+  get '/*' do
+
+    cid = get_domain_ipfs_cid_from_domain_name subdomain rescue ''
+    if request.fullpath == '/'
+      display_the_logic_of_the_page cid, subdomain
+    else
+      display_css_js_files cid
+    end
+  end
+
+  get '/ipfs/*' do
+    logger.info "== request.referer: #{request.referrer}, inspect: #{request.referrer == nil}"
+
+    url = ''
+    if request.referrer != nil
+      url = request.referrer + request.fullpath.gsub('/ipfs', '')
+    else
+      url = "https://cloudflare-ipfs.com/" + request.fullpath
+    end
+
+    logger.info "=== url is: #{url}"
+    response = HTTParty.get url
+
+    status 200
+
+    # 这里特别重要
+    my_headers = {'content-type' => response.headers['content-type']}
+    headers my_headers
+
+    body response.body
+  end
+end
+
 
 
 
