@@ -37,3 +37,13 @@ api.ddns.so {
     output file /var/log/access-api-ddns-so.log
   }
 }
+
+# 处理针对这两个域名的访问，后端是 ddns_rails项目
+www.ddns.so ddns.so {
+  handle {
+    reverse_proxy 127.0.0.1:3366
+  }
+  log {
+    output file /var/log/access-ddns-rails.log
+  }
+}
