@@ -1,0 +1,49 @@
+# 注意：假设我们提前设置好了 127.0.0.1:5001 是 ipfs gateway
+
+
+# 这里用来支持：
+# vitalik.eth.ddns.so
+# jiangplus.dot.ddns.so
+# 和 https://ddns.so
+*.ddns.so *.eth.ddns.so *.dot.ddns.so {
+  # 注意这个 /ipfs/* 特别重要。 一个字符都不能错
+  handle /ipfs/* {
+    reverse_proxy 127.0.0.1:5001
+  }
+
+  # 处理上面的情况之外的情况
+  handle {
+    reverse_proxy 127.0.0.1:4567
+  }
+
+  log {
+    output file /var/log/access-wildcard-ddns-so.log
+  }
+
+  tls {
+    dns cloudflare IqnbsvlA-wT4GZS0f56a7caYFoajIVlCjK8hm34f
+  }
+}
+
+# 这里用来支持：
+# https://api.ddns.so/name/jiangplus.dot
+# https://api.ddns.so/name/jiangplus.eth
+api.ddns.so {
+  handle {
+    reverse_proxy 127.0.0.1:4567
+  }
+
+  log {
+    output file /var/log/access-api-ddns-so.log
+  }
+}
+
+# 处理针对这两个域名的访问，后端是 ddns_rails项目
+www.ddns.so ddns.so {
+  handle {
+    reverse_proxy 127.0.0.1:3366
+  }
+  log {
+    output file /var/log/access-ddns-rails.log
+  }
+}
