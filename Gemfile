@@ -4,9 +4,12 @@ source 'https://rubygems.org'
 gem "sinatra-cross_origin", "~> 0.3.1"
 gem 'sinatra-contrib'
 gem 'sinatra-activerecord'
+gem 'async-dns'
 gem 'sinatra-subdomain'
 gem 'pg'
+gem 'async-dns'
 gem 'rake'
+gem 'rubydns'
 gem 'puma'
 
 gem 'eth'

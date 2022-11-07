@@ -21,13 +21,13 @@ password = 'eadd2f80c59511f3f73388d9d898277224fd623c689f232097a886500ad1118022ba
 host = '172.17.0.3'
 ActiveRecord::Base.establish_connection(adapter: 'postgresql', pool: "#{ENV["DATABASE_POOL"] || 64}", timeout: 5000, encoding: 'utf-8', host: "#{host}", user: 'postgres', username: 'postgres', password: "#{password}", port: 5432, database: 'ddns_rails')
 
-KYPE_CNAME = 1
 KYPE_A = 0
+KYPE_CNAME = 1
+KYPE_TXT = 2
 KYPE_IPFS = 3
 
 class Record < ActiveRecord::Base
 end
-
 
 BLANK_VALUE = nil
 # 修改这个即可， 例如 ddns.so,  test-ddns.com
@@ -394,6 +394,29 @@ def display_css_js_files cid
   body response.body
 end
 
+def get_domain_ip name, type
+  if type == 'IPFS' && Record.where('domain_name = ? and record_type = ?', name, KYPE_IPFS).first.present?
+    domain_ip = Record.where('domain_name = ? and record_type = ?', name, KYPE_IPFS).first.content
+  else
+    to_get_domain_ip = `dig @localhost -p 2346 #{name} #{type}`
+    puts "=== to_get_domain_ip #{to_get_domain_ip.inspect}"
+    if type ==  'TXT'
+      temp_domain_ip_data = to_get_domain_ip.inspect.split(';; ANSWER SECTION:').last.split('\n\n;; Query time:').first
+      domain_ip = temp_domain_ip_data.to_s.split('TXT').last.sub('\t\"', '').sub('\"', '')
+    elsif type == 'CNAME'
+      temp_domain_ip_data = to_get_domain_ip.inspect.to_s.split('Query time:').first.split(';; AUTHORITY SECTION:').last
+      temp_domain_ip = temp_domain_ip_data.split('\tIN\tSOA\t').last.gsub('\n', '').gsub(';', '')
+      temp_time = temp_domain_ip[-32, 32]
+      domain_ip = temp_domain_ip.split("#{temp_time}")
+    else
+      type = 'A'
+      temp_domain_ip_data = to_get_domain_ip.inspect.to_s.split('Query time:').first
+      domain_ip = temp_domain_ip_data.split('\tIN\tA\t').last.gsub('\n', '').gsub(';', '')
+    end
+  end
+  return domain_ip
+end
+
 # 用于解决浏览器的报错问题
 get '/favicon.ico' do
   send_file 'favicon.ico'
@@ -533,6 +556,23 @@ subdomain :api do
       }
     end
     json(result)
+  end
+
+  get '/new_domain/:name' do
+    name = params[:name]
+    type = params[:type]
+    #如果type是ipfs  就从数据库取数据
+    #否则，就走2346端口
+    domain_ip = get_domain_ip name, type
+
+    json({
+      result: 'ok',
+      data: {
+        domain_name: name,
+        ip: domain_ip,
+        type: (type.downcase rescue 'a')
+      }
+    })
   end
 
 end
