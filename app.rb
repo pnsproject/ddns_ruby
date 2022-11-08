@@ -19,7 +19,8 @@ end
 
 password = 'eadd2f80c59511f3f73388d9d898277224fd623c689f232097a886500ad1118022ba7a01683c1df2053c09e964e09e3bb539ad815031dd464cd17c143859a24c'
 host = '172.17.0.3'
-ActiveRecord::Base.establish_connection(adapter: 'postgresql', pool: "#{ENV["DATABASE_POOL"] || 64}", timeout: 5000, encoding: 'utf-8', host: "#{host}", user: 'postgres', username: 'postgres', password: "#{password}", port: 5432, database: 'ddns_rails')
+user = 'postgres'
+ActiveRecord::Base.establish_connection(adapter: 'postgresql', pool: "#{ENV["DATABASE_POOL"] || 64}", timeout: 5000, encoding: 'utf-8', host: "#{host}", user: "#{user}", username: "#{user}", password: "#{password}", port: 5432, database: 'ddns_rails')
 
 KYPE_A = 0
 KYPE_CNAME = 1
@@ -395,11 +396,16 @@ def display_css_js_files cid
 end
 
 def get_domain_ip name, type
+  domain_ip = ''
   if type == 'IPFS' && Record.where('domain_name = ? and record_type = ?', name, KYPE_IPFS).first.present?
     domain_ip = Record.where('domain_name = ? and record_type = ?', name, KYPE_IPFS).first.content
+  elsif type == 'CNAME' && Record.where('domain_name = ? and record_type = ?', name, KYPE_CNAME).first.present?
+    domain_ip = Record.where('domain_name = ? and record_type = ?', name, KYPE_CNAME).first.content
   else
-    to_get_domain_ip = `dig @localhost -p 2346 #{name} #{type}`
-    puts "=== to_get_domain_ip #{to_get_domain_ip.inspect}"
+    command = "dig @localhost -p 2346 #{name} #{type}"
+    logger.info "=== command #{command}"
+    to_get_domain_ip = `#{command}`
+    logger.info "=== to_get_domain_ip #{to_get_domain_ip}"
     if type ==  'TXT'
       temp_domain_ip_data = to_get_domain_ip.inspect.split(';; ANSWER SECTION:').last.split('\n\n;; Query time:').first
       domain_ip = temp_domain_ip_data.to_s.split('TXT').last.sub('\t\"', '').sub('\"', '')
@@ -414,7 +420,12 @@ def get_domain_ip name, type
       domain_ip = temp_domain_ip_data.split('\tIN\tA\t').last.gsub('\n', '').gsub(';', '')
     end
   end
-  return domain_ip
+  data = {
+    domain_name: name,
+    ip: domain_ip,
+    type: type.downcase
+  }
+  return data
 end
 
 # 用于解决浏览器的报错问题
@@ -521,15 +532,11 @@ subdomain :api do
     type = params[:type]
     #如果type是ipfs  就从数据库取数据
     #否则，就走2346端口
-    domain_ip = get_domain_ip name, type
+    data = get_domain_ip name, type
 
     json({
       result: 'ok',
-      data: {
-        domain_name: name,
-        ip: domain_ip,
-        type: (type.downcase rescue 'a')
-      }
+      data: data
     })
   end
 
