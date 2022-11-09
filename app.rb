@@ -26,13 +26,15 @@ end
 
 BLANK_VALUE = nil
 # 修改这个即可， 例如 ddns.so,  test-ddns.com
-SITE_NAME = "ddns.so"
+#SITE_NAME = "ddns.so"
+SITE_NAME = "test-ddns.com"
 
 
 #IPFS_SITE_NAME = "https://ipfsgate.#{SITE_NAME}"
 IPFS_SITE_NAME = ""
 #ENS_SERVER_URL = 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens'
-PNS_SERVER_URL = 'https://moonbeamgraph.test-pns-link.com/subgraphs/name/graphprotocol/pns'
+#PNS_SERVER_URL = 'https://moonbeamgraph.test-pns-link.com/subgraphs/name/graphprotocol/pns'
+PNS_SERVER_URL = 'https://pns-graph.ddns.so/subgraphs/name/graphprotocol/pns'
 ENS_SERVER_URL = 'https://api.thegraph.com/subgraphs/name/ensdomains/ens'
 
 # 我们约定它的 key 都是 string 类型
@@ -409,9 +411,9 @@ def get_domain_ip name, type
     record_local = Record.where('domain_name = ? and record_type = ?', name, type_name).first
   end
 
-  domain_ip = ''
-  if record_local.present?
-    domain_ip = record_local.content
+  result = ''
+  if record_local.present? || ( type == 'ipfs' && record_local.blank? )
+    result = record_local.content rescue ''
   else
     command = "dig @localhost -p 2346 #{name} #{type}"
     logger.info "=== command #{command}"
@@ -424,22 +426,21 @@ def get_domain_ip name, type
         e =~ /;/
       }
     }
-    temp_domain_ip = temp_domain_data.to_s.split('\\t').last.sub('"]]', '')
-    logger.info "=== temp_domain_ip: #{temp_domain_ip}"
+    temp_result = temp_domain_data.to_s.split('\\t').last.sub('"]]', '')
     if type ==  'txt'
-      domain_ip = temp_domain_ip.gsub('\\"', '')
+      result = temp_result.gsub('\\"', '')
     elsif type == 'cname'
-      temp_time = temp_domain_ip[-32, 32]
-      domain_ip = temp_domain_ip.split("#{temp_time}")
+      temp_time = temp_result[-32, 32]
+      result = temp_result.split(temp_time)
     else
       type = 'a'
-      domain_ip = temp_domain_ip
+      result = temp_result
     end
   end
 
   data = {
     domain_name: name,
-    ip: domain_ip,
+    value: result,
     type: type
   }
 
