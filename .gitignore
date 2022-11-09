@@ -15,6 +15,12 @@
 # Ignore uploaded files
 /public/uploads
 
+# Ignore node_modules
+node_modules/
+
+*.lock
+libffi-dev
+
 # Ignore all logfiles and tempfiles.
 log
 *.log
