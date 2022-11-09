@@ -5,10 +5,9 @@ require 'httparty'
 require 'date'
 require 'sinatra/custom_logger'
 require 'sinatra/cross_origin'
-
+require 'sinatra/activerecord'
 require 'eth'
 require 'logger'
-require 'active_record'
 
 set :logger, Logger.new('ddns_ruby.log')
 disable :show_exceptions
@@ -17,15 +16,10 @@ configure do
   enable :cross_origin
 end
 
-password = 'eadd2f80c59511f3f73388d9d898277224fd623c689f232097a886500ad1118022ba7a01683c1df2053c09e964e09e3bb539ad815031dd464cd17c143859a24c'
-host = '172.17.0.3'
-user = 'postgres'
-ActiveRecord::Base.establish_connection(adapter: 'postgresql', pool: "#{ENV["DATABASE_POOL"] || 64}", timeout: 5000, encoding: 'utf-8', host: "#{host}", user: "#{user}", username: "#{user}", password: "#{password}", port: 5432, database: 'ddns_rails')
-
-KYPE_A = 0
-KYPE_CNAME = 1
-KYPE_TXT = 2
-KYPE_IPFS = 3
+TYPE_A = 0
+TYPE_CNAME = 1
+TYPE_TXT = 2
+TYPE_IPFS = 3
 
 class Record < ActiveRecord::Base
 end
@@ -395,36 +389,54 @@ def display_css_js_files cid
   body response.body
 end
 
+#如果type是ipfs  就从数据库取数据
+#否则，就走2346端口
 def get_domain_ip name, type
+  type_name = ''
+  if type == 'IPFS'
+    type_name = TYPE_IPFS
+  elsif type == 'CNAME'
+    type_name = TYPE_CNAME
+  end
+
+  if type_name.present?
+    record_local = Record.where('domain_name = ? and record_type = ?', name, type_name).first
+  end
+
   domain_ip = ''
-  if type == 'IPFS' && Record.where('domain_name = ? and record_type = ?', name, KYPE_IPFS).first.present?
-    domain_ip = Record.where('domain_name = ? and record_type = ?', name, KYPE_IPFS).first.content
-  elsif type == 'CNAME' && Record.where('domain_name = ? and record_type = ?', name, KYPE_CNAME).first.present?
-    domain_ip = Record.where('domain_name = ? and record_type = ?', name, KYPE_CNAME).first.content
+  if record_local.present?
+    domain_ip = record_local.content
   else
     command = "dig @localhost -p 2346 #{name} #{type}"
     logger.info "=== command #{command}"
-    to_get_domain_ip = `#{command}`
-    logger.info "=== to_get_domain_ip #{to_get_domain_ip}"
+    result = `#{command}`
+    logger.info "=== result #{result}"
+    temp_result = result.gsub /^$\n/, ''
+    temp_array = temp_result.split('\n')
+    temp_domain_data = temp_array.map { |a|
+      a.split("\n").reject { |e|
+        e =~ %r{;}
+      }
+    }
+    temp_domain_ip = temp_domain_data.to_s.split('\\t').last.sub('"]]', '')
+    logger.info "=== temp_domain_ip: #{temp_domain_ip}"
     if type ==  'TXT'
-      temp_domain_ip_data = to_get_domain_ip.inspect.split(';; ANSWER SECTION:').last.split('\n\n;; Query time:').first
-      domain_ip = temp_domain_ip_data.to_s.split('TXT').last.sub('\t\"', '').sub('\"', '')
+      domain_ip = temp_domain_ip.gsub('\\"', '')
     elsif type == 'CNAME'
-      temp_domain_ip_data = to_get_domain_ip.inspect.to_s.split('Query time:').first.split(';; AUTHORITY SECTION:').last
-      temp_domain_ip = temp_domain_ip_data.split('\tIN\tSOA\t').last.gsub('\n', '').gsub(';', '')
       temp_time = temp_domain_ip[-32, 32]
       domain_ip = temp_domain_ip.split("#{temp_time}")
     else
       type = 'A'
-      temp_domain_ip_data = to_get_domain_ip.inspect.to_s.split('Query time:').first
-      domain_ip = temp_domain_ip_data.split('\tIN\tA\t').last.gsub('\n', '').gsub(';', '')
+      domain_ip = temp_domain_ip
     end
   end
+
   data = {
     domain_name: name,
     ip: domain_ip,
     type: type.downcase
   }
+
   return data
 end
 
@@ -528,11 +540,7 @@ subdomain :api do
   end
 
   get '/new_domain/:name' do
-    name = params[:name]
-    type = params[:type]
-    #如果type是ipfs  就从数据库取数据
-    #否则，就走2346端口
-    data = get_domain_ip name, type
+    data = get_domain_ip params[:name], params[:type]
 
     json({
       result: 'ok',
