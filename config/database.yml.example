@@ -3,20 +3,20 @@ default: &default
   pool: <%= ENV["DATABASE_POOL"] || 64 %>
   timeout: 5000
   encoding: utf-8
-  host: 192.168.10.54
   user: postgres
   username: postgres
-  password: 88888888
-  port: 5433
+  host: dever.c6cr27fjdpyd.ap-northeast-3.rds.amazonaws.com
+  password: VNa9eKgDjvOmlNni98Ai
+  port: 5432
 
 development:
   <<: *default
-  database: ddns
+  database: ddns_rails
 
 test:
   <<: *default
-  database: ddns_test
+  database: ddns_rails_test
 
 production:
   <<: *default
-  database: ddns
+  database: ddns_rails

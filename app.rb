@@ -28,6 +28,7 @@ BLANK_VALUE = nil
 # 修改这个即可， 例如 ddns.so,  test-ddns.com
 SITE_NAME = "ddns.so"
 
+
 #IPFS_SITE_NAME = "https://ipfsgate.#{SITE_NAME}"
 IPFS_SITE_NAME = ""
 #ENS_SERVER_URL = 'https://ensgraph.test-pns-link.com/subgraphs/name/graphprotocol/ens'
@@ -55,7 +56,7 @@ def post_request options
   return result
 end
 
-#用来从graphql获取某个ens域名的数据
+# 用来从graphql获取某个ens域名的数据
 def get_data_of_ens_domain_name name
   response = post_request server_url: ENS_SERVER_URL,
   body_in_hash: {
@@ -122,7 +123,7 @@ def reverse_by_pns_name address
 end
 
 
-#获得ens域名的注册时间和到期时间
+# 获得ens域名的注册时间和到期时间
 def get_registration_time_and_expiration_time_of_ens_domain_name domains_labelhash
   response_registration = post_request server_url: ENS_SERVER_URL,
   body_in_hash: {
@@ -137,7 +138,7 @@ def get_registration_time_and_expiration_time_of_ens_domain_name domains_labelha
   return registration
 end
 
-#用来从graphql获得某个pns域名的数据
+# 用来从graphql获得某个pns域名的数据
 def get_the_data_of_an_pns_domain_name_from_graphql name
   result = post_request server_url: PNS_SERVER_URL,
     body_in_hash: {
@@ -172,7 +173,7 @@ def get_records_for_dot_domain temp_result_sets_to_get_records
   return records_of_pns_domain
 end
 
-#获得ens域名的最终结果
+# 获得ens域名的最终结果
 def get_final_result_of_ens_domain data_of_ens_domain_name, registration_data_of_ens_domain_name
   domains_resolved_address = domains['resolvedAddress']['domains'] rescue BLANK_VALUE
   result = {
@@ -204,7 +205,7 @@ def get_final_result_of_ens_domain data_of_ens_domain_name, registration_data_of
   return result
 end
 
-#获取pns域名的最终结果
+# 获取pns域名的最终结果
 def get_pns_json_result temp_result_domain, records_of_pns_domain, registration_data_of_pns_domain, owner_address
   result = {
     name: temp_result_domain['name'],
@@ -389,13 +390,18 @@ def display_css_js_files cid
   body response.body
 end
 
-#如果type是ipfs  就从数据库取数据
-#否则，就走2346端口
+# 本方法 本来应该直接调用 dig @localhost -p 2346
+# 但是由于， type 会存在 ipfs 类型，不被 2346 app所支持
+# 所以需要在这里先进行对于 'ipfs'的查询
+# CNAME: 也需要放在这里处理，因为格式不同（2346 app需要它是个array)
+#
+# 如果type是ipfs/cname  就从数据库取数据
+# 否则，就走2346端口
 def get_domain_ip name, type
   type_name = ''
-  if type == 'IPFS'
+  if type == 'ipfs'
     type_name = TYPE_IPFS
-  elsif type == 'CNAME'
+  elsif type == 'cname'
     type_name = TYPE_CNAME
   end
 
@@ -415,18 +421,18 @@ def get_domain_ip name, type
     temp_array = temp_result.split('\n')
     temp_domain_data = temp_array.map { |a|
       a.split("\n").reject { |e|
-        e =~ %r{;}
+        e =~ /;/
       }
     }
     temp_domain_ip = temp_domain_data.to_s.split('\\t').last.sub('"]]', '')
     logger.info "=== temp_domain_ip: #{temp_domain_ip}"
-    if type ==  'TXT'
+    if type ==  'txt'
       domain_ip = temp_domain_ip.gsub('\\"', '')
-    elsif type == 'CNAME'
+    elsif type == 'cname'
       temp_time = temp_domain_ip[-32, 32]
       domain_ip = temp_domain_ip.split("#{temp_time}")
     else
-      type = 'A'
+      type = 'a'
       domain_ip = temp_domain_ip
     end
   end
@@ -434,7 +440,7 @@ def get_domain_ip name, type
   data = {
     domain_name: name,
     ip: domain_ip,
-    type: type.downcase
+    type: type
   }
 
   return data
@@ -539,7 +545,7 @@ subdomain :api do
     json(result)
   end
 
-  get '/new_domain/:name' do
+  get '/domain/:name' do
     data = get_domain_ip params[:name], params[:type]
 
     json({
@@ -593,7 +599,4 @@ subdomain do
     body response.body
   end
 end
-
-
-
 
