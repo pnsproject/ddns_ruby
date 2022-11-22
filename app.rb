@@ -307,6 +307,65 @@ def get_result_from_graphql_when_pns_domain name, is_show_subdomains
   return result
 end
 
+def get_result_when_bit_domain name, is_show_subdomains
+  command = %Q{curl -X POST https://indexer-v1.did.id/v1/sub/account/list -d'{"account":"#{name}","page":1,"size":20}'}
+  temp_result = `#{command}`
+  temp_subdomains_data = JSON.parse(temp_result)
+  logger.info "=== command #{command} return data #{temp_subdomains_data}"
+
+  command_to_get_records = %Q{curl -X POST https://indexer-v1.did.id/v1/account/records -d'{"account":"#{name}"}'}
+  return_records_data = `#{command_to_get_records}`
+  logger.info "=== command_to_get_records #{command_to_get_records} return_records_data #{return_records_data}"
+  temp_records = JSON.parse(return_records_data)['data']['records']
+  logger.info "=== temp_records #{temp_records}"
+
+  subdomain_count = temp_subdomains_data['data']['sub_account_total']
+  temp_subdomains = temp_subdomains_data['data']['sub_account_list']
+  temp_name_hash= temp_subdomains_data['data']['account_id_hex'] rescue BLANK_VALUE
+  logger.info "=== temp_subdomains #{temp_subdomains.inspect} temp_name_hash #{temp_name_hash}"
+  subdomains = []
+
+  if temp_subdomains.present?
+    subdomains = temp_subdomains.map {|e|
+      {
+        name: e['account'],
+        owner: e['owner_key']
+      }
+    }
+    puts "==== in subdomains "
+  end
+
+  records = []
+  if temp_records != []
+    records = temp_records.map { |e|
+      #e['key'].split('.').last => e['value']
+      logger.info "==== e #{e}"
+      {
+        name: "#{e['key'].to_s.split(".").last}",
+        value: e['value']
+      }
+    }
+  end
+  logger.info "== records #{records}"
+
+  result = {
+    name: name,
+    nameHash: temp_name_hash,
+    labelName: name.split('.').first,
+    labelHash: BLANK_VALUE,
+    owner: '',#todo,
+    parent: BLANK_VALUE,
+    subdomainCount: subdomain_count,
+    ttl: BLANK_VALUE,
+    cost: BLANK_VALUE,
+    expiryDate: BLANK_VALUE,
+    registrationDate: BLANK_VALUE,
+    records: records,
+  } rescue BLANK_VALUE
+  result['subdomains'] = subdomains if is_show_subdomains == 'yes'
+  return result
+end
+
 # example:
 # nft_id: 0xcc942b3e781ca36eba0d59bb1afc88cc1ff0d1b7dc54c5aba3c112f4387b6e23
 # return:
@@ -490,8 +549,14 @@ subdomain :api do
         result: 'ok',
         data: data
       })
+    when 'bit'
+      data = get_result_when_bit_domain name, is_show_subdomains
+      json({
+        result: 'ok',
+        data: data
+      })
     else
-      'only support .eth, .dot domain'
+      'only support .eth, .dot .bit domain'
     end
 
   end
