@@ -36,6 +36,7 @@ IPFS_SITE_NAME = ""
 #PNS_SERVER_URL = 'https://moonbeamgraph.test-pns-link.com/subgraphs/name/graphprotocol/pns'
 PNS_SERVER_URL = 'https://pns-graph.ddns.so/subgraphs/name/graphprotocol/pns'
 ENS_SERVER_URL = 'https://api.thegraph.com/subgraphs/name/ensdomains/ens'
+LENS_SERVER_URL = 'https://lens-graph.ddns.so/subgraphs/name/rtomas/lens-subgraph'
 
 # 我们约定它的 key 都是 string 类型
 # 例如 @cache['bitsofcode.eth'] = 'QmfFjVBz5wd66kyd89RWkJJiWEMq1Fde3XGN9MBfx47Btp'
@@ -75,8 +76,9 @@ end
 
 # 根据 domain的名字，例如 vitalik.eth 获得对应的ipfs cid
 def get_domain_ipfs_cid_from_domain_name subdomain
-  logger.info "==== in get_domain_ipfs_cid_from_domain_name"
+  logger.info "==== in get_domain_ipfs_cid_from_domain_name subdomain #{subdomain}"
   subdomain_type = subdomain.split('.').last
+  logger.info "=== subdomain_type #{subdomain_type}"
   result = ''
   case subdomain_type
   when 'eth'
@@ -274,8 +276,22 @@ def get_bit_domain_names_from_address address
   temp_result = `#{command}`
   logger.info "=== in get_bit_domain_names_from_address command #{command} temp_result #{temp_result}"
   result = JSON.parse(temp_result)['data']['account_list'].map{ |e| e["account"] } rescue []
-  logger.info "===result in pns#{result}"
+  logger.info "===result in bit#{result}"
   return result
+end
+
+def get_data_of_lens_domain_name name
+  response = post_request server_url: LENS_SERVER_URL,
+  body_in_hash: {
+    "query": "query MyQuery {\n profiles(first: 10, where: {handle:\"#{name}\"}) {\n   handle\n   id\n   imageURI\n   lastUpdated\n   profileId\n   totalComments\n   totalFollowings\n   totalFollowers\n   totalMirrors\n   totalPosts\n   owner {\n   id\n }\n }\n }",
+    "variables": nil,
+    "operationName": "MyQuery"
+  }
+  logger.info "== response: #{response}"
+  body = JSON.parse(response)
+  data_of_lens_domain_name = body['data']['profiles'][0]
+  logger.info "===domains #{data_of_lens_domain_name}"
+  return data_of_lens_domain_name
 end
 
 def get_result_from_graphql_when_ens_domain name, is_show_subdomains
@@ -285,6 +301,25 @@ def get_result_from_graphql_when_ens_domain name, is_show_subdomains
   result = get_final_result_of_ens_domain temp_data_of_ens_domain_name, temp_registration_data_of_ens_domain
   result['subdomains'] = temp_data_of_ens_domain_name['subdomains'] if is_show_subdomains == 'yes'
   logger.info "=== after add subdomains result : #{result}"
+  return result
+end
+
+def get_result_when_lens_domain name, is_show_subdomains
+  temp_data_of_lens_domain_name = get_data_of_lens_domain_name name
+
+  result = {
+    handle: name,
+    id: temp_data_of_lens_domain_name['id'],
+    imageURI: temp_data_of_lens_domain_name['imageURI'],
+    lastUpdated: "#{Time.at(temp_data_of_lens_domain_name['lastUpdated'].to_i).to_s}",
+    profileId: temp_data_of_lens_domain_name['profileId'],
+    totalComments: temp_data_of_lens_domain_name['totalComments'],
+    totalFollowings: temp_data_of_lens_domain_name['totalFollowings'],
+    totalFollowers: temp_data_of_lens_domain_name['totalFollowers'],
+    totalMirrors: temp_data_of_lens_domain_name['totalMirrors'],
+    totalPosts: temp_data_of_lens_domain_name['totalPosts'],
+    owner: temp_data_of_lens_domain_name['owner']['id'],
+  }
   return result
 end
 
@@ -323,8 +358,8 @@ def get_result_when_bit_domain name, is_show_subdomains
   temp_subdomains = temp_subdomains_data['data']['sub_account_list']
   temp_name_hash= temp_subdomains_data['data']['account_id_hex'] rescue BLANK_VALUE
   logger.info "=== temp_subdomains #{temp_subdomains.inspect} temp_name_hash #{temp_name_hash}"
-  subdomains = []
 
+  subdomains = BLANK_VALUE
   if temp_subdomains.present?
     subdomains = temp_subdomains.map {|e|
       {
@@ -335,10 +370,9 @@ def get_result_when_bit_domain name, is_show_subdomains
     puts "==== in subdomains "
   end
 
-  records = []
-  if temp_records != []
+  records = BLANK_VALUE
+  if temp_records.present?
     records = temp_records.map { |e|
-      #e['key'].split('.').last => e['value']
       logger.info "==== e #{e}"
       {
         name: "#{e['key'].to_s.split(".").last}",
@@ -353,7 +387,7 @@ def get_result_when_bit_domain name, is_show_subdomains
     nameHash: temp_name_hash,
     labelName: name.split('.').first,
     labelHash: BLANK_VALUE,
-    owner: '',#todo,
+    owner: BLANK_VALUE,
     parent: BLANK_VALUE,
     subdomainCount: subdomain_count,
     ttl: BLANK_VALUE,
@@ -549,8 +583,16 @@ subdomain :api do
         result: 'ok',
         data: data
       })
+
     when 'bit'
       data = get_result_when_bit_domain name, is_show_subdomains
+      json({
+        result: 'ok',
+        data: data
+      })
+
+    when 'lens'
+      data = get_result_when_lens_domain name, is_show_subdomains
       json({
         result: 'ok',
         data: data
@@ -601,7 +643,7 @@ subdomain :api do
     data_pns = get_pns_domain_names_from_address address
     data_bit = get_bit_domain_names_from_address address
     data = data_ens + data_pns + data_bit
-    logger.info "data : #{data}"
+    logger.info "data_ens#{data_ens} data_pns#{data_pns} data_bit #{data_bit}data : #{data}"
 
     json({
       result: 'ok',
