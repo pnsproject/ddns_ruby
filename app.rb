@@ -124,6 +124,14 @@ def reverse_by_pns_name address
   return result
 end
 
+def reverse_by_bit_name address
+  command = %Q{curl -X POST https://indexer-v1.did.id/v1/reverse/record -d'{"type":"blockchain","key_info":{"coin_type":"60","chain_id":"1","key":"#{address}"}}'}
+  logger.info "===in reverse_by_bit_name command #{command}"
+  temp_result = `#{command}`
+  logger.info "=== temp_result #{temp_result}"
+  result = JSON.parse(temp_result)['data']['account'] rescue BLANK_VALUE
+  return result
+end
 
 # 获得ens域名的注册时间和到期时间
 def get_registration_time_and_expiration_time_of_ens_domain_name domains_labelhash
@@ -243,7 +251,7 @@ def get_ens_domain_names_from_address address
       "variables": nil
     }
   logger.info "===temp_result in ens#{temp_result}"
-  result = JSON.parse(temp_result)['data']['account']['domains'].map{ |e| e["name"] } rescue BLANK_VALUE
+  result = JSON.parse(temp_result)['data']['account']['domains'].map{ |e| e["name"] } rescue []
   logger.info "===result in ens#{result}"
   return result
 end
@@ -256,7 +264,16 @@ def get_pns_domain_names_from_address address
       "variables": nil
     }
   logger.info "===temp_result in pns#{temp_result}"
-  result = JSON.parse(temp_result)['data']['domains'].map{ |e| e["name"] } rescue BLANK_VALUE
+  result = JSON.parse(temp_result)['data']['domains'].map{ |e| e["name"] } rescue []
+  logger.info "===result in pns#{result}"
+  return result
+end
+
+def get_bit_domain_names_from_address address
+  command = %Q{curl -X POST https://indexer-v1.did.id/v1/account/list -d'{"type":"blockchain","key_info":{"coin_type":"60","chain_id":"1","key":"#{address}"}}'}
+  temp_result = `#{command}`
+  logger.info "=== in get_bit_domain_names_from_address command #{command} temp_result #{temp_result}"
+  result = JSON.parse(temp_result)['data']['account_list'].map{ |e| e["account"] } rescue []
   logger.info "===result in pns#{result}"
   return result
 end
@@ -353,17 +370,17 @@ def display_the_logic_of_the_page cid, subdomain
     return
 
   # step2.如果域名有cname, 就展示
-  elsif (record_cname = Record.where('domain_name = ? and record_type = ?', subdomain, KYPE_CNAME).first) && record_cname.present?
+  elsif (record_cname = Record.where('domain_name = ? and record_type = ?', subdomain, TYPE_CNAME).first) && record_cname.present?
     url = "https://#{record_cname.content}"
     logger.info "=== url #{url} record_cname is #{record_cname.inspect}"
 
   # step3.如果域名有A记录, 就展示
-  elsif (record_a = Record.where('domain_name = ? and record_type = ?', subdomain, KYPE_A).first) && record_a.present?
+  elsif (record_a = Record.where('domain_name = ? and record_type = ?', subdomain, TYPE_A).first) && record_a.present?
     url = "https://#{record_a.content}"
     logger.info "=== url #{url} record_a is #{record_a.inspect}"
 
   # step4.如果域名有ipfs, 就展示
-  elsif (record_ipfs = Record.where('domain_name = ? and record_type = ?', subdomain, KYPE_IPFS).first) && record_ipfs.present?
+  elsif (record_ipfs = Record.where('domain_name = ? and record_type = ?', subdomain, TYPE_IPFS).first) && record_ipfs.present?
     url = record_ipfs.content
     logger.info "=== record_ipfs is #{record_ipfs.inspect} url #{url}"
 
@@ -427,7 +444,7 @@ def get_domain_ip name, type
       }
     }
     temp_result = temp_domain_data.to_s.split('\\t').last.sub('"]]', '')
-    if type ==  'txt'
+    if type == 'txt'
       result = temp_result.gsub('\\"', '')
     elsif type == 'cname'
       temp_time = temp_result[-32, 32]
@@ -491,8 +508,10 @@ subdomain :api do
     result = nil
     if params[:type] == 'ens'
       result = reverse_by_ens_name address rescue BLANK_VALUE
-    else
+    elsif params[:type] == 'pns'
       result = reverse_by_pns_name address rescue BLANK_VALUE
+    else
+      result = reverse_by_bit_name address rescue BLANK_VALUE
     end
     logger.info "result : #{result}"
 
@@ -513,11 +532,10 @@ subdomain :api do
     if address == nil || address == ''
       halt 404, 'page not found(address is missing) '
     end
-    if params[:type] == 'eth'
-      data = get_ens_domain_names_from_address address
-    else
-      data = get_pns_domain_names_from_address address
-    end
+    data_ens = get_ens_domain_names_from_address address
+    data_pns = get_pns_domain_names_from_address address
+    data_bit = get_bit_domain_names_from_address address
+    data = data_ens + data_pns + data_bit
     logger.info "data : #{data}"
 
     json({
