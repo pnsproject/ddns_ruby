@@ -354,9 +354,19 @@ def get_result_when_bit_domain name, is_show_subdomains
   temp_records = JSON.parse(return_records_data)['data']['records']
   logger.info "=== temp_records #{temp_records}"
 
+  command_to_get_account_info = %Q{curl -X POST https://indexer-v1.did.id/v1/account/info -d'{"account":"#{name}"}'}
+  return_account_info_data = `#{command_to_get_account_info}`
+  logger.info "=== command_to_get_account_info #{command_to_get_account_info} return_account_info_data #{return_account_info_data}"
+  temp_account_data = JSON.parse(return_account_info_data)
+  logger.info "=== temp_account_data #{temp_account_data}"
+  owner = temp_account_data['data']['account_info']['owner_key']
+  created_at = temp_account_data['data']['account_info']['create_at_unix']
+  expired_at = temp_account_data['data']['account_info']['expired_at_unix']
+  temp_name_hash= temp_account_data['data']['out_point']['tx_hash']
+  logger.info "== owner #{owner} created_at #{created_at} expired_at #{expired_at} temp_name_hash #{temp_name_hash}"
+
   subdomain_count = temp_subdomains_data['data']['sub_account_total']
   temp_subdomains = temp_subdomains_data['data']['sub_account_list']
-  temp_name_hash= temp_subdomains_data['data']['account_id_hex'] rescue BLANK_VALUE
   logger.info "=== temp_subdomains #{temp_subdomains.inspect} temp_name_hash #{temp_name_hash}"
 
   subdomains = BLANK_VALUE
@@ -387,13 +397,13 @@ def get_result_when_bit_domain name, is_show_subdomains
     nameHash: temp_name_hash,
     labelName: name.split('.').first,
     labelHash: BLANK_VALUE,
-    owner: BLANK_VALUE,
+    owner: owner,
     parent: BLANK_VALUE,
     subdomainCount: subdomain_count,
     ttl: BLANK_VALUE,
     cost: BLANK_VALUE,
-    expiryDate: BLANK_VALUE,
-    registrationDate: BLANK_VALUE,
+    expiryDate: "#{Time.at(expired_at.to_i).to_s}",
+    registrationDate: "#{Time.at(created_at.to_i).to_s}",
     records: records,
   } rescue BLANK_VALUE
   result['subdomains'] = subdomains if is_show_subdomains == 'yes'
