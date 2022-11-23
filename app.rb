@@ -294,17 +294,17 @@ def get_data_of_lens_domain_name name
   return data_of_lens_domain_name
 end
 
-def get_result_from_graphql_when_ens_domain name, is_show_subdomains
+def get_result_from_graphql_when_ens_domain name, subdomains
   temp_data_of_ens_domain_name = get_data_of_ens_domain_name name
-  logger.info "==temp_data_of_ens_domain_name #{temp_data_of_ens_domain_name} is_show_subdomains #{is_show_subdomains}"
+  logger.info "==temp_data_of_ens_domain_name #{temp_data_of_ens_domain_name} subdomains #{subdomains}"
   temp_registration_data_of_ens_domain = get_registration_time_and_expiration_time_of_ens_domain_name temp_data_of_ens_domain_name['labelhash'] rescue BLANK_VALUE
   result = get_final_result_of_ens_domain temp_data_of_ens_domain_name, temp_registration_data_of_ens_domain
-  result['subdomains'] = temp_data_of_ens_domain_name['subdomains'] if is_show_subdomains == 'yes'
+  result['subdomains'] = temp_data_of_ens_domain_name['subdomains'] if subdomains == 'yes'
   logger.info "=== after add subdomains result : #{result}"
   return result
 end
 
-def get_result_when_lens_domain name, is_show_subdomains
+def get_result_when_lens_domain name, subdomains
   temp_data_of_lens_domain_name = get_data_of_lens_domain_name name
 
   result = {
@@ -323,7 +323,7 @@ def get_result_when_lens_domain name, is_show_subdomains
   return result
 end
 
-def get_result_from_graphql_when_pns_domain name, is_show_subdomains
+def get_result_from_graphql_when_pns_domain name, subdomains
   temp_result = get_the_data_of_an_pns_domain_name_from_graphql name
   data_of_an_pns_domain_name = JSON.parse(temp_result)['data']['domains'][0]
   owner_address = data_of_an_pns_domain_name['owner']['id'] rescue BLANK_VALUE
@@ -331,18 +331,18 @@ def get_result_from_graphql_when_pns_domain name, is_show_subdomains
   registration_data_of_pns_domain = JSON.parse(temp_result)['data']['registrations'][0]
   records_of_pns_domain = get_records_for_dot_domain temp_result_sets_to_get_records
   result = get_pns_json_result data_of_an_pns_domain_name, records_of_pns_domain, registration_data_of_pns_domain, owner_address
-  logger.info "=== is_show_subdomains #{is_show_subdomains} before add subdomains result : #{result}"
+  logger.info "=== subdomains #{subdomains} before add subdomains result : #{result}"
   if data_of_an_pns_domain_name != nil
     data_of_an_pns_domain_name['subdomains'].each do |subdomain|
       subdomain['owner'] = subdomain['owner']['id']
     end
   end
-  result['subdomains'] = data_of_an_pns_domain_name['subdomains'] if is_show_subdomains == 'yes'
+  result['subdomains'] = data_of_an_pns_domain_name['subdomains'] if subdomains == 'yes'
   logger.info "=== after add subdomains result : #{result}"
   return result
 end
 
-def get_result_when_bit_domain name, is_show_subdomains
+def get_result_when_bit_domain name, subdomains
   command = %Q{curl -X POST https://indexer-v1.did.id/v1/sub/account/list -d'{"account":"#{name}","page":1,"size":20}'}
   temp_result = `#{command}`
   temp_subdomains_data = JSON.parse(temp_result)
@@ -369,9 +369,9 @@ def get_result_when_bit_domain name, is_show_subdomains
   temp_subdomains = temp_subdomains_data['data']['sub_account_list']
   logger.info "=== temp_subdomains #{temp_subdomains.inspect} temp_name_hash #{temp_name_hash}"
 
-  subdomains = BLANK_VALUE
+  show_subdomains = BLANK_VALUE
   if temp_subdomains.present?
-    subdomains = temp_subdomains.map {|e|
+    show_subdomains = temp_subdomains.map {|e|
       {
         name: e['account'],
         owner: e['owner_key']
@@ -406,7 +406,7 @@ def get_result_when_bit_domain name, is_show_subdomains
     registrationDate: "#{Time.at(created_at.to_i).to_s}",
     records: records,
   } rescue BLANK_VALUE
-  result['subdomains'] = subdomains if is_show_subdomains == 'yes'
+  result['subdomains'] = show_subdomains if subdomains == 'yes'
   return result
 end
 
@@ -577,32 +577,32 @@ end
 subdomain :api do
   get "/name/:name" do
     name = params[:name]
-    is_show_subdomains = params[:is_show_subdomains]
+    subdomains = params[:subdomains]
     subdomain_type = name.split('.').last
     case subdomain_type
     when 'eth'
-      data = get_result_from_graphql_when_ens_domain name, is_show_subdomains
+      data = get_result_from_graphql_when_ens_domain name, subdomains
       json({
         result: 'ok',
         data: data
       })
 
     when 'dot'
-      data = get_result_from_graphql_when_pns_domain name, is_show_subdomains
+      data = get_result_from_graphql_when_pns_domain name, subdomains
       json({
         result: 'ok',
         data: data
       })
 
     when 'bit'
-      data = get_result_when_bit_domain name, is_show_subdomains
+      data = get_result_when_bit_domain name, subdomains
       json({
         result: 'ok',
         data: data
       })
 
     when 'lens'
-      data = get_result_when_lens_domain name, is_show_subdomains
+      data = get_result_when_lens_domain name, subdomains
       json({
         result: 'ok',
         data: data
