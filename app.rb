@@ -151,10 +151,11 @@ end
 
 # 用来从graphql获得某个pns域名的数据
 def get_the_data_of_an_pns_domain_name_from_graphql name, page
+  logger.info "== in pns query page #{page}"
   result = post_request server_url: PNS_SERVER_URL,
     body_in_hash: {
+      "query": %Q{query MyQuery {\n  domains(where: {name: \"#{name}\"}) {\n    labelhash\n    labelName\n    id\n    name\n    subdomains(first: 20, skip: #{page * 20}) {\n      name\n      owner {\n        id\n      }\n    }\n    subdomainCount\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n  }\n  sets(where: {domain_: {name: \"#{name}\"}}) {\n    id\n    keyHash\n    value\n  }\n  registrations(where: {labelName: \"#{name.sub(".dot", '')}\"}) {\n    expiryDate\n    events {\n      id\n      triggeredDate\n    }\n  }\n}\n},
       "operationName": "MyQuery",
-      "query": "query MyQuery {\n  domains(where: {name: \"#{name}\"}) {\n    labelhash\n    labelName\n    id\n    name\n    subdomains(first: 20) {\n      name\n      owner {\n        id\n      }\n    }\n    subdomainCount\n    owner {\n      id\n    }\n    parent {\n      id\n    }\n  }\n  sets(where: {domain_: {name: \"#{name}\"}}) {\n    id\n    keyHash\n    value\n  }\n  registrations(where: {labelName: \"#{name.sub(".dot", '')}\"}) {\n    expiryDate\n    events {\n      id\n      triggeredDate\n    }\n  }\n}\n",
       "variables": nil
     }
   return result
@@ -294,11 +295,15 @@ def get_data_of_lens_domain_name name
 end
 
 def get_result_from_graphql_when_ens_domain name, subdomains, page
-  temp_data_of_ens_domain_name = get_data_of_ens_domain_name name, page
+  temp_data_of_ens_domain_name = get_data_of_ens_domain_name name, page - 1
   logger.info "==temp_data_of_ens_domain_name #{temp_data_of_ens_domain_name} subdomains #{subdomains}"
   temp_registration_data_of_ens_domain = get_registration_time_and_expiration_time_of_ens_domain_name temp_data_of_ens_domain_name['labelhash'] rescue BLANK_VALUE
   result = get_final_result_of_ens_domain temp_data_of_ens_domain_name, temp_registration_data_of_ens_domain
-  result['subdomains'] = temp_data_of_ens_domain_name['subdomains'] if subdomains == 'yes'
+  if subdomains == 'yes'
+    result['page'] = page
+    result['per'] = 20
+    result['subdomains'] = temp_data_of_ens_domain_name['subdomains']
+  end
   logger.info "=== after add subdomains result : #{result}"
   return result
 end
@@ -323,7 +328,7 @@ def get_result_when_lens_domain name, subdomains
 end
 
 def get_result_from_graphql_when_pns_domain name, subdomains, page
-  temp_result = get_the_data_of_an_pns_domain_name_from_graphql name, page
+  temp_result = get_the_data_of_an_pns_domain_name_from_graphql name, page - 1
   data_of_an_pns_domain_name = JSON.parse(temp_result)['data']['domains'][0]
   owner_address = data_of_an_pns_domain_name['owner']['id'] rescue BLANK_VALUE
   temp_result_sets_to_get_records = JSON.parse(temp_result)['data']['sets']
@@ -336,7 +341,11 @@ def get_result_from_graphql_when_pns_domain name, subdomains, page
       subdomain['owner'] = subdomain['owner']['id']
     end
   end
-  result['subdomains'] = data_of_an_pns_domain_name['subdomains'] if subdomains == 'yes'
+  if subdomains == 'yes'
+    result['page'] = page
+    result['per'] = 20
+    result['subdomains'] = data_of_an_pns_domain_name['subdomains']
+  end
   logger.info "=== after add subdomains result : #{result}"
   return result
 end
@@ -405,7 +414,11 @@ def get_result_when_bit_domain name, subdomains, page
     registrationDate: "#{Time.at(created_at.to_i).to_s}",
     records: records,
   } rescue BLANK_VALUE
-  result['subdomains'] = show_subdomains if subdomains == 'yes'
+  if subdomains == 'yes'
+    result['page'] = page
+    result['per'] = 20
+    result['subdomains'] = show_subdomains
+  end
   return result
 end
 
