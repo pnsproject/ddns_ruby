@@ -50,12 +50,18 @@ def post_request options
   server_url = options[:server_url]
   body_in_hash = options[:body_in_hash]
   logger.info "== before post request to: server_url: #{server_url} body_in_hash: #{body_in_hash}"
-  response = HTTParty.post server_url,
-    :headers => { 'Content-Type' => 'application/json', 'Accept' => 'application/json'},
-    :body => body_in_hash.to_json
+  begin
+    response = HTTParty.post server_url,
+      :headers => { 'Content-Type' => 'application/json', 'Accept' => 'application/json'},
+      :body => body_in_hash.to_json
 
-  logger.info "== response: #{response}"
-  result = response.body
+    logger.info "== response: #{response}"
+    result = response.body
+  rescue Exception => e
+    logger.error "=== error when visiting: #{server_url}"
+    logger.error e
+    logger.error e.backtrace.join("\n")
+  end
   return result
 end
 
@@ -291,6 +297,9 @@ def get_data_of_lens_domain_name name
   body = JSON.parse(response)
   data_of_lens_domain_name = body['data']['profiles'][0]
   logger.info "===domains #{data_of_lens_domain_name}"
+  logger.error "=== error when visiting: #{server_url}"
+  logger.error e
+  logger.error e.backtrace.join("\n")
   return data_of_lens_domain_name
 end
 
@@ -308,21 +317,22 @@ def get_result_from_graphql_when_ens_domain name, subdomains, page
   return result
 end
 
-def get_result_when_lens_domain name, subdomains
-  temp_data_of_lens_domain_name = get_data_of_lens_domain_name name
+def get_result_when_lens_domain name
+  temp_data_of_lens_domain_name = get_data_of_lens_domain_name name rescue ''
+  last_updated = Time.at(temp_data_of_lens_domain_name['lastUpdated'].to_i) if temp_data_of_lens_domain_name.present?
 
   result = {
     handle: name,
-    id: temp_data_of_lens_domain_name['id'],
-    imageURI: temp_data_of_lens_domain_name['imageURI'],
-    lastUpdated: "#{Time.at(temp_data_of_lens_domain_name['lastUpdated'].to_i).to_s}",
-    profileId: temp_data_of_lens_domain_name['profileId'],
-    totalComments: temp_data_of_lens_domain_name['totalComments'],
-    totalFollowings: temp_data_of_lens_domain_name['totalFollowings'],
-    totalFollowers: temp_data_of_lens_domain_name['totalFollowers'],
-    totalMirrors: temp_data_of_lens_domain_name['totalMirrors'],
-    totalPosts: temp_data_of_lens_domain_name['totalPosts'],
-    owner: temp_data_of_lens_domain_name['owner']['id'],
+    id: (temp_data_of_lens_domain_name['id'] rescue BLANK_VALUE),
+    imageURI: (temp_data_of_lens_domain_name['imageURI'] rescue BLANK_VALUE),
+    lastUpdated: (last_updated rescue BLANK_VALUE),
+    profileId: (temp_data_of_lens_domain_name['profileId'] rescue BLANK_VALUE),
+    totalComments: (temp_data_of_lens_domain_name['totalComments'] rescue BLANK_VALUE),
+    totalFollowings: (temp_data_of_lens_domain_name['totalFollowings'] rescue BLANK_VALUE),
+    totalFollowers: (temp_data_of_lens_domain_name['totalFollowers'] rescue BLANK_VALUE),
+    totalMirrors: (temp_data_of_lens_domain_name['totalMirrors'] rescue BLANK_VALUE),
+    totalPosts: (temp_data_of_lens_domain_name['totalPosts'] rescue BLANK_VALUE),
+    owner: (temp_data_of_lens_domain_name['owner']['id'] rescue BLANK_VALUE)
   }
   return result
 end
@@ -618,7 +628,7 @@ subdomain :api do
       })
 
     when 'lens'
-      data = get_result_when_lens_domain name, subdomains
+      data = get_result_when_lens_domain name
       json({
         result: 'ok',
         data: data
@@ -712,7 +722,7 @@ end
 # 用来访问 www.ddns.so , ddns.so
 subdomain [:www, nil] do
   get '/' do
-    json result: "Hi there~, subdomain is: #{subdomain}"
+    json({result: "Hi there~, subdomain is: #{subdomain}"})
   end
 end
 
