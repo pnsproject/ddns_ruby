@@ -51,6 +51,17 @@ class AppTest < Test::Unit::TestCase
     assert_equal "0x36aa229e20134008dd688e59b955d6674c81016f6bda65375a8ef7712bc3f802", body['data']['nameHash']
   end
 
+  test "should get /name/brantly.eth?subdomains=yes" do
+    header "HOST", "api.ddns.so"
+    response = get '/name/brantly.eth?subdomains=yes'
+
+    body = JSON.parse(response.body)
+    assert_equal "ok", body['result']
+    assert_equal "brantly.eth", body['data']['name']
+    assert_equal 20, body['data']['per']
+    assert last_response.body.include?('brantly.eth')
+  end
+
   test "should get /name/zzzzzzzzzzzzzzzzzzzzz.dot?subdomains=yes" do
     header "HOST", "api.ddns.so"
     response = get '/name/zzzzzzzzzzzzzzzzzzzzz.dot?subdomains=yes'
@@ -59,6 +70,7 @@ class AppTest < Test::Unit::TestCase
     assert_equal "ok", body['result']
     assert_equal "zzzzzzzzzzzzzzzzzzzzz.dot", body['data']['name']
     assert_equal 20, body['data']['per']
+    assert last_response.body.include?('zzzzzzzzzzzzzzzzzzzzz.dot')
   end
 
   test "should get /name/0x.bit?subdomains=yes&page=3" do
@@ -69,6 +81,7 @@ class AppTest < Test::Unit::TestCase
     assert_equal "ok", body['result']
     assert_equal "0x.bit", body['data']['name']
     assert_equal 20, body['data']['per']
+    assert last_response.body.include?('0x.bit')
   end
 
   test "should get /reverse/ens/0x0b23E3588c906C3F723C58Ef4d6baEe7840A977c" do
@@ -108,6 +121,18 @@ class AppTest < Test::Unit::TestCase
     body = JSON.parse(response.body)
     assert_equal "ok", body['result']
     assert_equal "0x0b23E3588c906C3F723C58Ef4d6baEe7840A977c", body['address']
+    assert last_response.body.include?('zzzzzzzzzzzzzzzzzzzzz.dot')
+    assert last_response.body.include?('daydayup666.eth')
+  end
+
+  test "should get /get_all_domain_names/0x4f34124bc7d275a801016f699b539d89605769cc" do
+    header "HOST", "api.ddns.so"
+    response = get '/get_all_domain_names/0x4f34124bc7d275a801016f699b539d89605769cc'
+
+    body = JSON.parse(response.body)
+    assert_equal "ok", body['result']
+    assert_equal "0x4f34124bc7d275a801016f699b539d89605769cc", body['address']
+    assert last_response.body.include?('0x.bit')
   end
 
 end
