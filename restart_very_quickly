@@ -1,3 +1,5 @@
 kill -9 `ps -ef | grep ddns | grep 4567 | awk {'print $2'}`
-#kill -9 `ps -ef | grep puma | grep 5.6.5 | grep -E 'l$' | awk {'print $2'}`
 setsid nohup bundle exec ruby app.rb &
+
+kill -9 `ps -ef | grep ruby | grep get_domain_ip | awk {'print $2'}`
+setsid nohup bundle exec ruby get_domain_ip.rb &
