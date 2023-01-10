@@ -192,15 +192,22 @@ def get_records_for_dot_domain temp_result_sets_to_get_records
   return records_of_pns_domain
 end
 
+def get_checksummed_address address
+  temp_address = Eth::Address.new "#{address}" rescue ''
+  checksummed_address = temp_address.checksummed rescue BLANK_VALUE
+  return checksummed_address
+end
+
 # 获得ens域名的最终结果
 def get_final_result_of_ens_domain data_of_ens_domain_name, registration_data_of_ens_domain_name
   domains_resolved_address = domains['resolvedAddress']['domains'] rescue BLANK_VALUE
+  owner = get_checksummed_address data_of_ens_domain_name['owner']['id']
   result = {
     name: data_of_ens_domain_name['name'],
     nameHash: data_of_ens_domain_name['id'],
     labelName: data_of_ens_domain_name['labelName'],
     labelHash: data_of_ens_domain_name['labelhash'],
-    owner: data_of_ens_domain_name['owner']['id'],
+    owner: owner,
     parent: data_of_ens_domain_name['parent']['id'],
     subdomainCount: data_of_ens_domain_name['subdomainCount'],
     ttl: data_of_ens_domain_name['ttl'],
@@ -214,7 +221,7 @@ def get_final_result_of_ens_domain data_of_ens_domain_name, registration_data_of
     #},
     records: {
       contentHash: (data_of_ens_domain_name['resolver']['contentHash'] rescue BLANK_VALUE),
-      eth: data_of_ens_domain_name['owner']['id'],
+      eth: owner,
       dot: BLANK_VALUE,
       btc: BLANK_VALUE,
       text: (domains['resolver']['texts'] rescue BLANK_VALUE),
@@ -226,19 +233,26 @@ end
 
 # 获取pns域名的最终结果
 def get_pns_json_result temp_result_domain, records_of_pns_domain, registration_data_of_pns_domain, owner_address
+  owner = get_checksummed_address owner_address if owner_address.present?
+  record_eth_address = ''
+  if records_of_pns_domain['eth']['value'].present?
+    record_eth_address = get_checksummed_address records_of_pns_domain['eth']['value']
+  else
+    record_eth_address = owner
+  end
   result = {
     name: temp_result_domain['name'],
     nameHash: temp_result_domain['id'],
     labelName: temp_result_domain['labelName'],
     labelHash: temp_result_domain['labelhash'],
-    owner: (owner_address rescue BLANK_VALUE),
+    owner: (owner rescue BLANK_VALUE),
     parent: temp_result_domain['parent']['id'],
     expiryDate: (Time.at(registration_data_of_pns_domain['expiryDate'].to_i) rescue BLANK_VALUE),
     registrationDate: (Time.at(registration_data_of_pns_domain['events'][0]['triggeredDate'].to_i) rescue BLANK_VALUE),
     subdomainCount: temp_result_domain['subdomainCount'],
     records: {
       dot: (records_of_pns_domain['dot']['value'] rescue BLANK_VALUE),
-      eth: (records_of_pns_domain['eth']['value'] rescue BLANK_VALUE),
+      eth: (record_eth_address rescue BLANK_VALUE),
       btc: (records_of_pns_domain['btc']['value'] rescue BLANK_VALUE),
       ipfs: (records_of_pns_domain['ipfs']['value'] rescue BLANK_VALUE),
       email: (records_of_pns_domain['email']['value'] rescue BLANK_VALUE),
@@ -387,7 +401,6 @@ def get_subdomains_when_bit_domain name, page
         owner: e['owner_key']
       }
     }
-    puts "==== in subdomains "
   end
 
   result = {
@@ -416,7 +429,7 @@ def get_result_when_bit_domain name, page
   logger.info "=== command_to_get_account_info #{command_to_get_account_info} return_account_info_data #{return_account_info_data}"
   temp_account_data = JSON.parse(return_account_info_data)
   logger.info "=== temp_account_data #{temp_account_data}"
-  owner = temp_account_data['data']['account_info']['owner_key']
+  owner = get_checksummed_address temp_account_data['data']['account_info']['owner_key']
   created_at = temp_account_data['data']['account_info']['create_at_unix']
   expired_at = temp_account_data['data']['account_info']['expired_at_unix']
   temp_name_hash= temp_account_data['data']['out_point']['tx_hash']
@@ -434,7 +447,6 @@ def get_result_when_bit_domain name, page
         owner: e['owner_key']
       }
     }
-    puts "==== in subdomains "
   end
 
   records = BLANK_VALUE
@@ -460,14 +472,10 @@ def get_result_when_bit_domain name, page
     ttl: BLANK_VALUE,
     cost: BLANK_VALUE,
     expiryDate: "#{Time.at(expired_at.to_i).to_s}",
-    registrationDate: "#{Time.at(created_at.to_i).to_s}",
-    records: records,
+    registrationDate: "#{Time.at(created_at.to_i).to_s}"
   } rescue BLANK_VALUE
-  if subdomains == 'yes'
-    result['page'] = page
-    result['per'] = 20
-    result['subdomains'] = show_subdomains
-  end
+  records = { eth: owner } if records.blank?
+  result['records'] = records
   return result
 end
 
@@ -718,6 +726,7 @@ subdomain :api do
     if address == nil || address == ''
       halt 404, 'page not found(address is missing) '
     end
+    checksummed_address = get_checksummed_address address
     result = nil
     if params[:type] == 'ens'
       result = reverse_by_ens_name address rescue BLANK_VALUE
@@ -730,7 +739,7 @@ subdomain :api do
 
     json({
       result: 'ok',
-      address: address,
+      address: checksummed_address,
       data: result
     })
 
